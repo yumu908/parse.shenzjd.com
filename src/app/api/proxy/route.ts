@@ -273,6 +273,15 @@ const ALLOWED_DOMAINS = [
   "twimg.com",
   "x.com",
   "t.co",
+  "tiktok.com",
+  "tiktokcdn.com",
+  "tiktokcdn-us.com",
+  "tiktokv.com",
+  "byteoversea.com",
+  "facebook.com",
+  "fbcdn.net",
+  "fb.watch",
+  "fb.com",
 ];
 
 function isAllowedDomain(hostname: string): boolean {
@@ -408,6 +417,25 @@ export async function GET(req: NextRequest) {
       lower.includes("douyinstatic")
     ) {
       return "https://qishui.douyin.com/";
+    }
+
+    if (lower.includes("kg.qq") || lower.includes("kg2.qq")) {
+      return "https://kg.qq.com/";
+    }
+
+    if (
+      lower.includes("tiktok") ||
+      lower.includes("byteoversea")
+    ) {
+      return undefined;
+    }
+
+    if (
+      lower.includes("facebook") ||
+      lower.includes("fbcdn") ||
+      lower.includes("fb.watch")
+    ) {
+      return "https://www.facebook.com/";
     }
 
     if (

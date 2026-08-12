@@ -30,6 +30,8 @@ export const PLATFORMS = {
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
   QSMUSIC: "qsmusic", // 汽水音乐
+  TIKTOK: "tiktok",
+  FACEBOOK: "facebook",
 } as const;
 
 type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
@@ -223,6 +225,20 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     domains: ["quanmin.baidu.com", "xspshare.baidu.com"],
     shortDomains: ["xspshare.baidu.com"],
     supportsIdParse: true,
+  },
+  [PLATFORMS.TIKTOK]: {
+    name: "TikTok",
+    nameEn: "TikTok",
+    domains: ["tiktok.com", "tiktokv.com"],
+    shortDomains: ["vt.tiktok.com", "vm.tiktok.com", "v.tiktok.com"],
+    supportsIdParse: true,
+  },
+  [PLATFORMS.FACEBOOK]: {
+    name: "Facebook",
+    nameEn: "Facebook",
+    domains: ["facebook.com", "fb.com", "fb.watch"],
+    shortDomains: ["fb.watch", "fb.gg"],
+    supportsIdParse: false,
   },
 };
 

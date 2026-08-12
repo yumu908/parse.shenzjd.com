@@ -144,6 +144,18 @@ export const VIDEO_PLATFORMS = {
     color: "#14171a",
     gradient: "from-[#14171a] to-[#657786]",
   },
+  tiktok: {
+    name: "TikTok",
+    emoji: "🎵",
+    color: "#00f2fe",
+    gradient: "from-[#00f2fe] to-[#4facfe]",
+  },
+  facebook: {
+    name: "Facebook",
+    emoji: "📘",
+    color: "#1877f2",
+    gradient: "from-[#1877f2] to-[#3b5998]",
+  },
 } as const;
 
 export type VideoPlatformKey = keyof typeof VIDEO_PLATFORMS;

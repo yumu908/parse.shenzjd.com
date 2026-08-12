@@ -229,6 +229,23 @@ function extractFilterReason(videoInfo) {
  */
 async function extractIdAndRedirectUrl(url) {
   try {
+    // 1. 优先采用 redirect: "manual" 极速抓取 302/301 Location 响应头 (100% 稳定防短链挂起与重定向丢 ID)
+    try {
+      const manualRes = await fetch(url, {
+        headers: MOBILE_HEADERS,
+        redirect: "manual",
+        signal: AbortSignal.timeout(5000),
+      });
+      const location = manualRes.headers.get("location");
+      if (location) {
+        const result = extractIdFromUrl(location);
+        if (result) return { ...result, redirectUrl: location };
+      }
+    } catch (e) {
+      logger.warn(`Manual redirect check failed for ${url}: ${e.message}`);
+    }
+
+    // 2. 兜底策略：发起跟进重定向
     const response = await fetch(url, {
       headers: MOBILE_HEADERS,
       redirect: "follow",

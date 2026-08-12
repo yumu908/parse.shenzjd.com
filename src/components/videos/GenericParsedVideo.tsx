@@ -83,6 +83,18 @@ function proxyUrl(url: string | undefined, referer?: string): string {
       }
     }
 
+    // TikTok 与 Facebook CDN 支持浏览器直连放行
+    if (
+      hostname.includes("tiktok") ||
+      hostname.includes("tiktokcdn") ||
+      hostname.includes("tiktokv") ||
+      hostname.includes("byteoversea") ||
+      hostname.includes("facebook") ||
+      hostname.includes("fbcdn")
+    ) {
+      return url;
+    }
+
     return `/api/proxy?url=${encodeURIComponent(url)}${
       ref ? `&referer=${encodeURIComponent(ref)}` : ""
     }`;
@@ -133,9 +145,9 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
             videoRef.current.src = videoUrl;
           }
         });
-    } else {
-      videoRef.current.src = videoUrl;
     }
+    // 注意：非 m3u8 的普通 MP4 视频完全交由 JSX 上的 src={videoUrl} 触发加载，
+    // 严禁在此处二次执行 videoRef.current.src = videoUrl 重复赋值，避免触发浏览器打断 onError 伪报错。
 
     return () => {
       if (hls) {
@@ -147,6 +159,8 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   if (!data.data) {
     return null;
   }
+
+  const isM3u8 = rawUrl.toLowerCase().includes(".m3u8") || videoUrl.toLowerCase().includes(".m3u8");
 
   return (
     <div className="space-y-5" style={{ touchAction: "pan-y" }}>
@@ -179,15 +193,21 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
         <div className="glass-card overflow-hidden">
           <video
             ref={videoRef}
-            src={rawUrl.toLowerCase().includes(".m3u8") || videoUrl.toLowerCase().includes(".m3u8") ? undefined : videoUrl}
+            src={isM3u8 ? undefined : videoUrl}
             poster={proxyUrl(d.cover)}
             controls
             playsInline
             referrerPolicy="no-referrer"
             className="w-full max-h-[70vh] bg-black"
-            onError={() =>
-              setVideoError("视频加载失败，可复制直链在浏览器打开")
-            }
+            onError={() => {
+              // 关键防护：如果视频实际已经缓冲加载 (readyState >= 2)，忽略浏览器打断引发的伪 onError 报错
+              if (videoRef.current && videoRef.current.readyState >= 2) {
+                setVideoError(null);
+                return;
+              }
+              setVideoError("视频加载失败，可复制直链在浏览器打开");
+            }}
+            onCanPlay={() => setVideoError(null)}
             onLoadedData={() => setVideoError(null)}
           />
           {videoError && (
@@ -212,8 +232,8 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
       {videoUrl && (
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <a
-            href={videoUrl}
-            download
+            href={`/api/proxy?url=${encodeURIComponent(rawUrl)}&disposition=attachment&filename=${encodeURIComponent((d?.title || "video").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) + ".mp4")}`}
+            download={`${d?.title || "video"}.mp4`}
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-medium text-sm transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5">
             <svg

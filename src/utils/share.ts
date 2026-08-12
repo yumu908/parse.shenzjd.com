@@ -67,6 +67,13 @@ export function hasValidVideoUrl(text: string): boolean {
     "twitter.com",
     "x.com",
     "t.co",
+    "tiktok.com",
+    "vt.tiktok.com",
+    "vm.tiktok.com",
+    "v.tiktok.com",
+    "facebook.com",
+    "fb.watch",
+    "fb.com",
     "6.cn",
   ];
   const t = text.toLowerCase();
@@ -89,6 +96,21 @@ export function detectPlatform(text: string): VideoPlatformKey {
   } catch { }
 
   if (!host) return "douyin";
+
+  // 3. 严格基于提取出的 URL 域名判定平台 (特异性子域名优先匹配)
+  if (
+    host.includes("tiktok.com") ||
+    host.includes("tiktokv.com")
+  ) {
+    return "tiktok";
+  }
+  if (
+    host.includes("facebook.com") ||
+    host.includes("fb.watch") ||
+    host.includes("fb.com")
+  ) {
+    return "facebook";
+  }
 
   // 3. 严格基于提取出的 URL 域名判定平台 (特异性子域名优先匹配)
   if (
