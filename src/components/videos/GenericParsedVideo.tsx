@@ -7,26 +7,85 @@ interface GenericParsedVideoProps {
   data: ApiResponse;
 }
 
-// 判断 URL 是否需要通过代理（避免 Mixed Content 和 CORS）
+// 判断 URL 是否需要通过代理（避免 Mixed Content、CORS 和防盗链拦截）
 function proxyUrl(url: string | undefined, referer?: string): string {
   if (!url) return url || "";
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (
-      hostname.includes("snssdk") ||
-      hostname.includes("douyinvod") ||
-      hostname.includes("douyinpic") ||
-      hostname.includes("iesdouyin") ||
-      hostname.includes("aweme") ||
-      hostname.includes("xhscdn") ||
-      hostname.includes("xhsimgs") ||
-      hostname.includes("redbook")
-    ) {
-      const ref = referer || (hostname.includes("xhscdn") || hostname.includes("xhsimgs") || hostname.includes("redbook")
-        ? "https://www.xiaohongshu.com/"
-        : "https://www.douyin.com/");
-      return `/api/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref)}`;
+    // 相对路径、本地 API 或 blob 链接不进行代理
+    if (url.startsWith("/") || url.startsWith("blob:")) return url;
+
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1") return url;
+
+    // 根据 CDN 域名智能设定防盗链 Referer
+    let ref = referer || "";
+    if (!ref) {
+      if (hostname.includes("xhs") || hostname.includes("redbook")) {
+        ref = "https://www.xiaohongshu.com/";
+      } else if (
+        hostname.includes("douyin") ||
+        hostname.includes("snssdk") ||
+        hostname.includes("aweme") ||
+        hostname.includes("iesdouyin")
+      ) {
+        ref = "https://www.douyin.com/";
+      } else if (hostname.includes("weishi") || hostname.includes("qq.com")) {
+        ref = "https://h5.weishi.qq.com/";
+      } else if (
+        hostname.includes("kwai") ||
+        hostname.includes("kuaishou") ||
+        hostname.includes("gifshow")
+      ) {
+        ref = "https://www.kuaishou.com/";
+      } else if (
+        hostname.includes("weibo") ||
+        hostname.includes("sina") ||
+        hostname.includes("oasis")
+      ) {
+        ref = "https://weibo.com/";
+      } else if (hostname.includes("6.cn") || hostname.includes("xiu123")) {
+        ref = "https://v.6.cn/";
+      } else if (
+        hostname.includes("acfun") ||
+        hostname.includes("aixifan") ||
+        hostname.includes("ks-cdn")
+      ) {
+        ref = "https://www.acfun.cn/";
+      } else if (
+        hostname.includes("bilibili") ||
+        hostname.includes("hdslb") ||
+        hostname.includes("bilivideo")
+      ) {
+        ref = "https://www.bilibili.com/";
+      } else if (
+        hostname.includes("huya") ||
+        hostname.includes("msstatic") ||
+        hostname.includes("huyacdn")
+      ) {
+        ref = "https://www.huya.com/";
+      } else if (hostname.includes("douyu") || hostname.includes("douyucdn")) {
+        ref = "https://v.douyu.com/";
+      } else if (hostname.includes("pearvideo")) {
+        ref = "https://www.pearvideo.com/";
+      } else if (
+        hostname.includes("haokan") ||
+        hostname.includes("hao123") ||
+        hostname.includes("videocc") ||
+        hostname.includes("bdstatic") ||
+        hostname.includes("vse.baidu") ||
+        hostname.includes("sv.baidu") ||
+        hostname.includes("fsv.baidu")
+      ) {
+        ref = "https://haokan.baidu.com/";
+      } else if (hostname.includes("meipai") || hostname.includes("meitudata")) {
+        ref = "https://www.meipai.com/";
+      }
     }
+
+    return `/api/proxy?url=${encodeURIComponent(url)}${
+      ref ? `&referer=${encodeURIComponent(ref)}` : ""
+    }`;
   } catch {}
   return url;
 }
@@ -35,15 +94,59 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const d = data?.data as GenericParsedData;
+  const rawUrl = d?.url || "";
+  const videoUrl = proxyUrl(rawUrl);
+  const images = d?.images?.filter(Boolean) || [];
+
+  React.useEffect(() => {
+    if (!videoUrl || !videoRef.current) return;
+
+    const isM3u8 = rawUrl.toLowerCase().includes(".m3u8") || videoUrl.toLowerCase().includes(".m3u8");
+    let hls: any = null;
+
+    if (isM3u8) {
+      import("hls.js")
+        .then((HlsModule) => {
+          const Hls = HlsModule.default;
+          if (Hls.isSupported() && videoRef.current) {
+            hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+            });
+            hls.loadSource(videoUrl);
+            hls.attachMedia(videoRef.current);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              setVideoError(null);
+            });
+            hls.on(Hls.Events.ERROR, (_: any, errData: any) => {
+              if (errData.fatal) {
+                setVideoError("m3u8 流媒体播放失败，可复制直链在浏览器打开");
+              }
+            });
+          } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+            videoRef.current.src = videoUrl;
+          }
+        })
+        .catch(() => {
+          if (videoRef.current) {
+            videoRef.current.src = videoUrl;
+          }
+        });
+    } else {
+      videoRef.current.src = videoUrl;
+    }
+
+    return () => {
+      if (hls) {
+        hls.destroy();
+      }
+    };
+  }, [videoUrl, rawUrl]);
+
   if (!data.data) {
     return null;
   }
-
-  const d = data.data as GenericParsedData;
-  // 视频源也需走代理：抖音/小红书 CDN 的直链需要正确 Referer 才能播放，
-  // 直接用 d.url 会因跨域/Referer 校验失败而无法加载（与 avatar/cover/images 保持一致）
-  const videoUrl = proxyUrl(d.url || "");
-  const images = d.images?.filter(Boolean) || [];
 
   return (
     <div className="space-y-5" style={{ touchAction: "pan-y" }}>
@@ -76,10 +179,11 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
         <div className="glass-card overflow-hidden">
           <video
             ref={videoRef}
-            src={videoUrl}
+            src={rawUrl.toLowerCase().includes(".m3u8") || videoUrl.toLowerCase().includes(".m3u8") ? undefined : videoUrl}
             poster={proxyUrl(d.cover)}
             controls
             playsInline
+            referrerPolicy="no-referrer"
             className="w-full max-h-[70vh] bg-black"
             onError={() =>
               setVideoError("视频加载失败，可复制直链在浏览器打开")
@@ -105,24 +209,69 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
         </div>
       )}
 
-      {images.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {images.map((src, i) => (
-            <a
-              key={`${src}-${i}`}
-              href={proxyUrl(src)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle">
-              <Image
-                src={proxyUrl(src)}
-                alt=""
-                fill
-                className="object-cover"
-                unoptimized
+      {videoUrl && (
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <a
+            href={videoUrl}
+            download
+            rel="noopener noreferrer"
+            className="group inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-medium text-sm transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5">
+            <svg
+              className="w-4 h-4 transition-transform group-hover:scale-110"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
-            </a>
-          ))}
+            </svg>
+            下载视频
+          </a>
+
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(rawUrl);
+              alert("已复制视频 m3u8/mp4 直链地址到剪贴板！");
+            }}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium text-sm transition-all duration-300 border border-border-subtle hover:border-accent">
+            <svg
+              className="w-4 h-4 text-muted group-hover:text-accent transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+            复制 m3u8/MP4 直链
+          </button>
+
+          <a
+            href={rawUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium text-sm transition-all duration-300 border border-border-subtle">
+            <svg
+              className="w-4 h-4 text-muted group-hover:text-accent transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+            打开原 m3u8 链接
+          </a>
         </div>
       )}
     </div>

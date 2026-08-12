@@ -22,11 +22,11 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
         <div className="flex items-center gap-4 mb-4">
           {musicData.cover && (
             <Image
-              src={musicData.cover}
-              alt={musicData.name}
+              src={`/api/proxy?url=${encodeURIComponent(musicData.cover)}`}
+              alt={musicData.name || "音乐封面"}
               width={80}
               height={80}
-              className="rounded-lg shadow-lg"
+              className="rounded-lg shadow-lg object-cover"
               unoptimized
             />
           )}
@@ -40,34 +40,46 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
           <div className="mb-4">
             <audio
               controls
+              src={`/api/proxy?url=${encodeURIComponent(
+                musicData.url
+              )}&referer=${encodeURIComponent("https://qishui.douyin.com/")}&disposition=inline`}
               className="w-full"
               style={{
                 filter:
                   "sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)",
                 borderRadius: "8px",
               }}>
-              <source src={musicData.url} type="audio/mpeg" />
               您的浏览器不支持音频播放
             </audio>
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-3">
           {musicData.url && (
             <a
               href={`/api/proxy?url=${encodeURIComponent(
                 musicData.url
-              )}&filename=${encodeURIComponent(musicData.name || "music")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium">
-              下载音乐
+              )}&referer=${encodeURIComponent("https://qishui.douyin.com/")}&filename=${encodeURIComponent(musicData.name || "music")}&disposition=attachment`}
+              download
+              className="px-5 py-2.5 bg-white text-purple-600 rounded-xl hover:bg-purple-50 transition-all font-medium text-sm shadow-md">
+              下载音频
             </a>
+          )}
+          {musicData.url && (
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(musicData.url);
+                alert("已复制汽水音乐直链到剪贴板！");
+              }}
+              className="px-5 py-2.5 bg-purple-600/80 hover:bg-purple-600 text-white rounded-xl transition-all font-medium text-sm border border-purple-400/30">
+              复制音频直链
+            </button>
           )}
           {musicData.lyrics && (
             <button
               onClick={() => setShowLyrics(!showLyrics)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+              className="px-5 py-2.5 bg-purple-700/80 hover:bg-purple-700 text-white rounded-xl transition-all font-medium text-sm">
               {showLyrics ? "隐藏歌词" : "显示歌词"}
             </button>
           )}

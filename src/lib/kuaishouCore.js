@@ -567,11 +567,24 @@ class KuaishouParser {
   }
   parseWithBroadSearch(htmlContent) {
     try {
+      // 1. 优先提取原生的完整高清 .mp4 直链（完全排除 .m3u8 与 .ts 切片）
+      const mp4Matches = htmlContent.match(/https?:\/\/[^"'\s\\]+\.mp4(?:[^"'\s\\]*)?/gi);
+      if (mp4Matches) {
+        for (const rawUrl of mp4Matches) {
+          const url = this.cleanUrl(rawUrl);
+          if (this.isValidVideoUrl(url) && !url.includes(".m3u8") && !url.includes(".ts")) {
+            const videoData = { photoUrl: url, source: "broad-search-mp4" };
+            this.extractAdditionalInfo(htmlContent, videoData);
+            return formatResponse(200, "解析成功", videoData);
+          }
+        }
+      }
+
       const broadPatterns = [
-        /https?:\/\/[^"'\s]+\.(?:mp4|m3u8|flv|avi|mov|wmv|mkv)(?:[^"'\s]*)?/gi,
-        /https?:\/\/[^"'\s]*(?:video|media|stream|play|cdn)[^"'\s]*\.(?:mp4|m3u8|flv)/gi,
-        /https?:\/\/[^"'\s]*(?:kuaishou|kwai|ks)[^"'\s]*\.(mp4|m3u8|flv)/gi,
-        /https?:\/\/[^"'\s]+(?:play|stream|video)[^"'\s]*/gi,
+        /https?:\/\/[^"'\s]+\.mp4(?:[^"'\s]*)?/gi,
+        /https?:\/\/[^"'\s]*(?:video|media|stream|play|cdn)[^"'\s]*\.mp4/gi,
+        /https?:\/\/[^"'\s]*(?:kuaishou|kwai|ks)[^"'\s]*\.mp4/gi,
+        /https?:\/\/[^"'\s]+\.(?:m3u8|flv|avi|mov|wmv|mkv)(?:[^"'\s]*)?/gi,
       ];
       for (const pattern of broadPatterns) {
         const matches = htmlContent.match(pattern);

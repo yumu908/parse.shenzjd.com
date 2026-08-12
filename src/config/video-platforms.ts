@@ -96,6 +96,12 @@ export const VIDEO_PLATFORMS = {
     color: "#ff9f1a",
     gradient: "from-[#ff9f1a] to-[#ffbf69]",
   },
+  douyu: {
+    name: "斗鱼",
+    emoji: "🦈",
+    color: "#ff5d23",
+    gradient: "from-[#ff5d23] to-[#ff8f3d]",
+  },
   acfun: {
     name: "AcFun",
     emoji: "🅰️",
@@ -125,12 +131,6 @@ export const VIDEO_PLATFORMS = {
     emoji: "6️⃣",
     color: "#a55eea",
     gradient: "from-[#a55eea] to-[#8854d0]",
-  },
-  xinpianchang: {
-    name: "新片场",
-    emoji: "🎞️",
-    color: "#26de81",
-    gradient: "from-[#26de81] to-[#20bf6b]",
   },
   haokan: {
     name: "好看视频",

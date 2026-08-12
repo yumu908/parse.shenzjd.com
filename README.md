@@ -2,13 +2,13 @@
 
 一个短视频解析服务，支持 24+ 平台的视频解析与下载。
 
-在线体验：<https://parse.shenzjd.com>
+在线体验：[https://parse.shenzjd.com](https://parse.shenzjd.com)
 
 > 免责声明：本项目仅用于技术学习与搜索聚合演示，不存储、不传播任何受版权保护的内容。请勿用于商业或侵权用途。
 
 ## 支持平台
 
-抖音、快手、微博、哔哩哔哩、小红书、皮皮虾、皮皮搞笑、汽水音乐、绿洲、火山、微视、西瓜视频、最右、度小视、梨视频、虎牙、AcFun、美拍、逗拍、全民K歌、六间房、新片场、好看视频、X（Twitter）。
+抖音、快手、微博、哔哩哔哩、小红书、皮皮虾、皮皮搞笑、汽水音乐、绿洲、火山、微视、西瓜视频、最右、度小视（app已下架）、梨视频、虎牙、斗鱼、AcFun、美拍、逗拍（app已下架）、全民K歌、六间房、新片场（有验证勾选，不维护了）、好看视频、X（Twitter）。
 
 > 注：平台解析能力依赖各站实时接口，部分平台可能受风控/地区影响暂时不可用。
 
@@ -20,6 +20,32 @@
 - SEO 友好：Next.js 架构，天然利于索引与收录
 - 可私有化：一键 Docker 部署，独立域名与数据可控
 
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+npm install
+```
+
+### 2. 本地开发运行
+
+```bash
+npm run dev
+```
+
+启动后在浏览器打开 `http://localhost:3000` 即可访问。
+
+### 3. 生产构建与运行
+
+```bash
+# 构建打包
+npm run build
+
+# 启动生产服务
+npm start
+```
+
 ## 一键部署
 
 ### Vercel
@@ -28,23 +54,32 @@
 
 ### Cloudflare（Workers）
 
-## 一键部署到 Cloudflare Workers
-
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
 
 - 点击上方按钮，按向导授权并创建项目即可自动构建与发布。
 - 若你已 fork 本仓库，点击后可在向导中选择你的 fork 进行部署。
+
+也可以使用 CLI 本地开发与部署：
+
+```bash
+npm run wrk:dev     # 开发调试 Cloudflare Worker
+npm run wrk:deploy  # 部署到 Cloudflare
+```
 
 ---
 
 ### Docker
 
 ```bash
-# GHCR
+# 本地构建与运行
+docker build -t parse-short .
+docker run --name parse -p 3000:3000 -d parse-short
+
+# 使用 GHCR 镜像
 docker pull ghcr.io/wu529778790/parse.shenzjd.com:latest
 docker run --name parse -p 3000:3000 -d ghcr.io/wu529778790/parse.shenzjd.com:latest
 
-# Docker Hub
+# Docker Hub 镜像
 docker pull docker.io/wu529778790/parse.shenzjd.com:latest
 docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:latest
 ```
@@ -57,7 +92,7 @@ docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:
 npm test
 ```
 
-包含 URL 提取 / 平台识别、`api-utils` 等本地逻辑，**不访问**各视频平台。
+包含 URL 提取 / 平台识别、`api-utils` 等本地逻辑，**不访问**各视频平台。也可开启监听模式：`npm run test:watch`。
 
 ### 真机解析测试（直连上游，必配分享链接）
 
@@ -67,17 +102,16 @@ npm test
 
    - 模板文件：[`tests/live/urls.example.env`](tests/live/urls.example.env)
    - 将其中变量写入项目根目录的 `.env.local`（已加入 `.gitignore` 时不要提交真实链接）。
+2. 执行命令：
 
-2. 执行：
+   全平台（Windows / Linux / macOS）直接运行：
 
    ```bash
    npm run test:live
    ```
 
    该命令会设置 `RUN_LIVE_PARSE=1`，并对 **24 个解析路由** 各跑一条用例；**缺少任一 `LIVE_URL_*` 时会在 `beforeAll` 中报错并列出变量名**。
-
 3. 可选：`LIVE_PARSE_TIMEOUT_MS`（默认 `120000`）用于单条用例超时（毫秒）。
-
 4. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env.local` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`（与 `API.md` 一致）。
 
 说明：真机测试受地区、风控、Cookie 与链接失效影响，失败时请更换有效分享链或网络环境后重试。

@@ -41,11 +41,12 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#00aeec] to-[#4dc9ff] blur-sm opacity-50" />
                 <Image
-                  src={data.user.user_img}
-                  alt={data.user.name}
+                  src={`/api/proxy?url=${encodeURIComponent(data.user.user_img)}`}
+                  alt={data.user.name || "UP主"}
                   width={56}
                   height={56}
                   className="relative rounded-full border-2 border-glass-3"
+                  unoptimized
                 />
               </div>
             )}

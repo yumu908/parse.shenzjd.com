@@ -196,6 +196,8 @@ const ALLOWED_DOMAINS = [
   "kscdns.com",
   "ksyungslb.com",
   "gifshow.com",
+  "yximgs.com",
+  "yximgs.cn",
   "xiaohongshu.com",
   "xhslink.com",
   "xhscdn.com",
@@ -204,10 +206,73 @@ const ALLOWED_DOMAINS = [
   "pipigx.com",
   "pipix.com",
   "ippzone.com",
+  "szsttkj.com",
+  "sttkj.com",
+  "ibytedtos.com",
+  "pstatp.com",
   "weibo.com",
+  "weibo.cn",
+  "weibocdn.com",
+  "weibocdn.cn",
+  "weibo.org",
+  "weibocdn.org",
+  "weibocdn.net",
+  "weibo.net",
+  "weishi.qq.com",
   "sinaimg.cn",
   "sina.com.cn",
+  "sina.cn",
+  "sina.com",
+  "sinaapp.com",
   "douyin.com",
+  "bdstatic.com",
+  "baidu.com",
+  "bcebos.com",
+  "baidupcs.com",
+  "6.cn",
+  "6img.cn",
+  "6rooms.com",
+  "xiu123.cn",
+  "xiu.6.cn",
+  "pearvideo.com",
+  "pearvideo.cn",
+  "acfun.cn",
+  "acfun.tv",
+  "aixifan.com",
+  "ks-cdn.com",
+  "huya.com",
+  "huya.cn",
+  "msstatic.com",
+  "huyacdn.com",
+  "douyu.com",
+  "douyucdn.cn",
+  "douyucdn2.cn",
+  "douyucdn3.cn",
+  "douyusdn.com",
+  "meipai.com",
+  "meitudata.com",
+  "doupai.cc",
+  "doupai.tv",
+  "qq.com",
+  "gtimg.cn",
+  "myqcloud.com",
+  "qpic.cn",
+  "izuiyou.com",
+  "xiaochuankeji.com",
+  "hao123.com",
+  "videocc.net",
+  "oasis.weibo.cn",
+  "oasis.weibo.com",
+  "volccdn.com",
+  "toutiao50.com",
+  "bytedance.com",
+  "byteimg.com",
+  "douyinstatic.com",
+  "qishui.douyin.com",
+  "twitter.com",
+  "twimg.com",
+  "x.com",
+  "t.co",
 ];
 
 function isAllowedDomain(hostname: string): boolean {
@@ -231,7 +296,16 @@ export async function GET(req: NextRequest) {
   }
 
   const search = req.nextUrl.searchParams;
-  const targetUrl = search.get("url");
+  let targetUrl = search.get("url");
+  if (targetUrl && targetUrl.startsWith("/api/proxy")) {
+    try {
+      const u = new URL(targetUrl, "http://localhost:3000");
+      targetUrl = u.searchParams.get("url") || targetUrl;
+    } catch {}
+  }
+  if (targetUrl && targetUrl.startsWith("//")) {
+    targetUrl = "https:" + targetUrl;
+  }
   const customFilename = search.get("filename") || undefined;
   const customReferer = search.get("referer") || undefined;
   const customUA = search.get("ua") || undefined;
@@ -310,12 +384,37 @@ export async function GET(req: NextRequest) {
       lower.includes("kwimgs") ||
       lower.includes("ksyungslb") ||
       lower.includes("gifshow") ||
-      lower.includes("kscdns")
+      lower.includes("kscdns") ||
+      lower.includes("yximgs")
     ) {
       return "https://www.kuaishou.com/";
     }
 
-    if (lower.includes("weibo") || lower.includes("sina")) {
+    if (
+      lower.includes("haokan") ||
+      lower.includes("hao123") ||
+      lower.includes("videocc") ||
+      lower.includes("bdstatic") ||
+      lower.includes("vse.baidu") ||
+      lower.includes("sv.baidu") ||
+      lower.includes("fsv.baidu")
+    ) {
+      return "https://haokan.baidu.com/";
+    }
+
+    if (
+      lower.includes("qishui") ||
+      lower.includes("byteimg") ||
+      lower.includes("douyinstatic")
+    ) {
+      return "https://qishui.douyin.com/";
+    }
+
+    if (
+      lower.includes("weibo") ||
+      lower.includes("sina") ||
+      lower.includes("oasis")
+    ) {
       return "https://weibo.com/";
     }
 
@@ -334,6 +433,38 @@ export async function GET(req: NextRequest) {
       lower.includes("ippzone")
     ) {
       return "https://h5.pipix.com/";
+    }
+
+    if (
+      lower.includes("douyu") ||
+      lower.includes("douyucdn") ||
+      lower.includes("douyusdn")
+    ) {
+      return "https://v.douyu.com/";
+    }
+
+    if (
+      lower.includes("acfun") ||
+      lower.includes("aixifan") ||
+      lower.includes("ks-cdn")
+    ) {
+      return "https://www.acfun.cn/";
+    }
+
+    if (
+      lower.includes("huya") ||
+      lower.includes("msstatic") ||
+      lower.includes("huyacdn")
+    ) {
+      return "https://www.huya.com/";
+    }
+
+    if (lower.includes("pearvideo")) {
+      return "https://www.pearvideo.com/";
+    }
+
+    if (lower.includes("6.cn") || lower.includes("xiu123")) {
+      return "https://v.6.cn/";
     }
 
     return `${parsed.protocol}//${parsed.host}/`;
@@ -551,9 +682,54 @@ export async function GET(req: NextRequest) {
     upstreamResp.headers.get("content-type") ||
     "application/octet-stream";
 
-  // 为抖音资源设置正确的Content-Type
+  // 特殊重写 .m3u8 描述文件内容：将 m3u8 中的相对 TS / m3u8 切片行自动重写为通过 /api/proxy 代理的绝对 URL
+  const isM3u8Request = targetUrl.includes(".m3u8") || contentType.includes("mpegurl");
+  if (isM3u8Request && upstreamResp.ok) {
+    try {
+      const text = await upstreamResp.text();
+      const baseUrl = new URL(currentUrl);
+
+      const rewrittenText = text.replace(/^(?!#)([^\r\n]+)/gm, (segmentLine) => {
+        const trimmed = segmentLine.trim();
+        if (!trimmed || trimmed.startsWith("/api/proxy")) return segmentLine;
+        try {
+          const segUrl = new URL(trimmed, baseUrl).toString();
+          if (segUrl.startsWith("http://localhost") || segUrl.includes("/api/proxy")) {
+            return segmentLine;
+          }
+          const proxiedSeg = `/api/proxy?url=${encodeURIComponent(segUrl)}${
+            refererToUse ? `&referer=${encodeURIComponent(refererToUse)}` : ""
+          }`;
+          return proxiedSeg;
+        } catch {
+          return segmentLine;
+        }
+      });
+
+      const m3u8Headers: Record<string, string> = {
+        ...corsHeaders,
+        "Content-Type": "application/vnd.apple.mpegurl",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      };
+
+      return new Response(rewrittenText, {
+        status: 200,
+        headers: m3u8Headers,
+      });
+    } catch {}
+  }
+
+  // 为抖音/小红书资源设置正确的Content-Type
   let finalContentType = contentType;
-  if (
+  const isAudioReq =
+    contentType.includes("audio") ||
+    targetUrl.includes("mime_type=audio") ||
+    refererToUse?.includes("qishui") ||
+    targetUrl.includes("qishui");
+
+  if (isAudioReq) {
+    finalContentType = contentType.includes("audio") ? contentType : "audio/mp4";
+  } else if (
     parsed.hostname.includes("snssdk") ||
     parsed.hostname.includes("douyinvod") ||
     parsed.hostname.includes("zjcdn") ||
@@ -577,10 +753,23 @@ export async function GET(req: NextRequest) {
   const lastSegment = urlPathname.split("/").filter(Boolean).pop() || "file";
   const baseCandidate = customFilename || lastSegment;
   const baseNameNoExt = baseCandidate.replace(/\.[a-z0-9]{1,6}$/i, "");
-  const ext =
+  let ext =
     extFromMime(contentType) ||
     (baseCandidate.match(/\.[a-z0-9]{1,6}$/i)?.[0] ?? "");
-  const finalFilename = sanitizeFilename(baseNameNoExt) + (ext || "");
+
+  // 如果请求是视频/视频代理，将 .ts / 空扩展名统一强制规范纠正为 .mp4 文件
+  if (!ext || ext === ".ts" || ext === ".bin") {
+    if (
+      finalContentType.includes("video") ||
+      (!finalContentType.includes("image") &&
+        !finalContentType.includes("audio") &&
+        !finalContentType.includes("mpegurl"))
+    ) {
+      ext = ".mp4";
+    }
+  }
+
+  const finalFilename = sanitizeFilename(baseNameNoExt) + (ext || ".mp4");
 
   const respHeaders: Record<string, string> = {
     ...corsHeaders,

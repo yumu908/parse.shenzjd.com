@@ -16,6 +16,7 @@ export const PLATFORMS = {
   LISHI_PIN: "lishipin",
   PIPI_GX: "pipigx",
   HUYA: "huya",
+  DOUYU: "douyu",
   BILIBILI: "bilibili",
   WEIBO: "weibo",
   LVZHOU: "lvzhou",
@@ -28,6 +29,7 @@ export const PLATFORMS = {
   ACFUN: "acfun",
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
+  QSMUSIC: "qsmusic", // 汽水音乐
 } as const;
 
 type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
@@ -40,8 +42,15 @@ export interface PlatformInfoEntry {
   supportsIdParse: boolean;
 }
 
-// 平台信息映射
+// 平台信息映射 (汽水音乐必须放在抖音的前面)
 export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
+  [PLATFORMS.QSMUSIC]: {
+    name: "汽水音乐",
+    nameEn: "QishuiMusic",
+    domains: ["qishui.douyin.com", "music.douyin.com"],
+    shortDomains: ["qishui.douyin.com"],
+    supportsIdParse: true,
+  },
   [PLATFORMS.DOUYIN]: {
     name: "抖音",
     nameEn: "Douyin",
@@ -67,7 +76,7 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     name: "皮皮虾",
     nameEn: "Pipixia",
     domains: ["pipix.com"],
-    shortDomains: [],
+    shortDomains: ["h5.pipix.com", "v.pipix.com"],
     supportsIdParse: true,
   },
   [PLATFORMS.HUOSHAN]: {
@@ -81,7 +90,12 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     name: "微视",
     nameEn: "Weishi",
     domains: ["weishi.qq.com"],
-    shortDomains: ["isee.weishi.qq.com"],
+    shortDomains: [
+      "video.weishi.qq.com",
+      "isee.weishi.qq.com",
+      "m.weishi.qq.com",
+      "h5.weishi.qq.com",
+    ],
     supportsIdParse: true,
   },
   [PLATFORMS.XIGUA]: {
@@ -108,8 +122,8 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.PIPI_GX]: {
     name: "皮皮搞笑",
     nameEn: "Pipigaoxiao",
-    domains: ["pipigx.com"],
-    shortDomains: ["h5.pipigx.com"],
+    domains: ["pipigx.com", "ippzone.com"],
+    shortDomains: ["h5.pipigx.com", "h5.ippzone.com"],
     supportsIdParse: true,
   },
   [PLATFORMS.HUYA]: {
@@ -117,6 +131,13 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     nameEn: "Huya",
     domains: ["huya.com"],
     shortDomains: ["v.huya.com"],
+    supportsIdParse: true,
+  },
+  [PLATFORMS.DOUYU]: {
+    name: "斗鱼",
+    nameEn: "Douyu",
+    domains: ["douyu.com"],
+    shortDomains: ["v.douyu.com", "vmobile.douyu.com"],
     supportsIdParse: true,
   },
   [PLATFORMS.BILIBILI]: {
@@ -136,8 +157,8 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.LVZHOU]: {
     name: "绿洲",
     nameEn: "Lvzhou",
-    domains: ["weibo.cn"],
-    shortDomains: [],
+    domains: ["oasis.weibo.cn", "oasis.weibo.com"],
+    shortDomains: ["m.oasis.weibo.cn"],
     supportsIdParse: true,
   },
   [PLATFORMS.MEIPAI]: {
@@ -207,18 +228,56 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
 
 // 从 URL 识别平台
 export function identifyPlatform(url: string): string | null {
-  const hostname = new URL(url).hostname.toLowerCase();
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
 
-  for (const [platform, info] of Object.entries(PLATFORM_INFO)) {
-    // 检查主域名
-    if (info.domains.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
-      return platform;
+    // 1. 优先特异性主机名强效拦截 (防止被通配后缀吞噬)
+    if (
+      hostname === "qishui.douyin.com" ||
+      hostname.endsWith(".qishui.douyin.com") ||
+      hostname === "music.douyin.com" ||
+      hostname.endsWith(".music.douyin.com")
+    ) {
+      return PLATFORMS.QSMUSIC;
     }
-    // 检查短域名
-    if (info.shortDomains?.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
-      return platform;
+
+    if (
+      hostname === "oasis.weibo.cn" ||
+      hostname.endsWith(".oasis.weibo.cn") ||
+      hostname === "oasis.weibo.com" ||
+      hostname.endsWith(".oasis.weibo.com") ||
+      hostname.includes("oasis")
+    ) {
+      return PLATFORMS.LVZHOU;
     }
-  }
+
+    if (
+      hostname === "weishi.qq.com" ||
+      hostname.endsWith(".weishi.qq.com") ||
+      hostname.includes("weishi")
+    ) {
+      return PLATFORMS.WEISHI;
+    }
+
+    for (const [platform, info] of Object.entries(PLATFORM_INFO)) {
+      // 若当前 Host 含有 qishui 或 music，严禁落入普通抖音
+      if (platform === PLATFORMS.DOUYIN && (hostname.includes("qishui") || hostname.includes("music"))) {
+        continue;
+      }
+      // 若当前 Host 含有 oasis，严禁落入普通微博
+      if (platform === PLATFORMS.WEIBO && hostname.includes("oasis")) {
+        continue;
+      }
+      // 检查主域名
+      if (info.domains.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
+        return platform;
+      }
+      // 检查短域名
+      if (info.shortDomains?.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
+        return platform;
+      }
+    }
+  } catch { }
 
   return null;
 }
@@ -255,7 +314,9 @@ export const ALL_DOMAINS: string[] = [
   "xiaochuankeji.com",
   "pearvideo.com",
   "pipigx.com",
+  "ippzone.com",
   "huya.com",
+  "douyu.com",
   "bilibili.com",
   "weibo.com",
   "m.weibo.com",
@@ -283,6 +344,9 @@ export const ALL_DOMAINS: string[] = [
   "share.huoshan.com",
   "isee.weishi.qq.com",
   "h5.pipigx.com",
+  "h5.ippzone.com",
+  "h5.pipix.com",
+  "v.pipix.com",
   "v.huya.com",
   "b23.tv",
 ];

@@ -70,9 +70,28 @@ async function pipigxParse(url) {
   }
 
   const post = response.data.post;
-  const videos = post.videos?.filter((v) => Array.isArray(v)) || [];
-  
-  if (videos.length === 0 || !videos[0]?.url) {
+  let videoUrl = null;
+  let coverUrl = "";
+
+  if (post.videos) {
+    const videoList = Array.isArray(post.videos)
+      ? post.videos
+      : Object.values(post.videos);
+
+    for (const item of videoList) {
+      if (!item) continue;
+      const v = Array.isArray(item) ? item[0] : item;
+      if (v?.url) {
+        videoUrl = v.url;
+        if (v.thumb) {
+          coverUrl = `https://file.ippzone.com/img/frame/id/${v.thumb}`;
+        }
+        break;
+      }
+    }
+  }
+
+  if (!videoUrl) {
     return { code: 404, msg: "视频地址不存在" };
   }
 
@@ -81,8 +100,9 @@ async function pipigxParse(url) {
     msg: "解析成功",
     data: {
       title: post.content || "无标题",
-      cover: `https://file.ippzone.com/img/frame/id/${videos[0].thumb || ""}`,
-      video: videos[0].url,
+      cover: coverUrl,
+      video: videoUrl,
+      url: videoUrl,
     },
   };
 }

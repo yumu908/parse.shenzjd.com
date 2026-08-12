@@ -32,6 +32,53 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const handlePlay = () => setIsPlaying(true);
   const handlePause = () => setIsPlaying(false);
 
+  React.useEffect(() => {
+    if (!kuaishouData.photoUrl || !videoRef.current) return;
+
+    const rawUrl = kuaishouData.photoUrl;
+    const isM3u8 = rawUrl.toLowerCase().includes(".m3u8");
+    let hls: any = null;
+
+    if (isM3u8) {
+      import("hls.js")
+        .then((HlsModule) => {
+          const Hls = HlsModule.default;
+          if (Hls.isSupported() && videoRef.current) {
+            hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+            });
+            const proxySrc = `/api/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`;
+            hls.loadSource(proxySrc);
+            hls.attachMedia(videoRef.current);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              setVideoError(null);
+            });
+            hls.on(Hls.Events.ERROR, (_: any, errData: any) => {
+              if (errData.fatal) {
+                setVideoError("m3u8 流媒体播放失败，可复制直链在浏览器打开");
+              }
+            });
+          } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+            videoRef.current.src = `/api/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`;
+          }
+        })
+        .catch(() => {
+          if (videoRef.current) {
+            videoRef.current.src = `/api/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`;
+          }
+        });
+    } else {
+      videoRef.current.src = `/api/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}&disposition=inline`;
+    }
+
+    return () => {
+      if (hls) {
+        hls.destroy();
+      }
+    };
+  }, [kuaishouData.photoUrl]);
+
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info */}
@@ -63,25 +110,15 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
             <video
               ref={videoRef}
               controls
-              poster={kuaishouData.coverUrl || undefined}
+              poster={kuaishouData.coverUrl ? `/api/proxy?url=${encodeURIComponent(kuaishouData.coverUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}` : undefined}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}
               onPlay={handlePlay}
-              onPause={handlePause}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  kuaishouData.photoUrl
-                )}&disposition=inline`}
-                type="video/mp4"
-              />
-              <p className="text-center text-gray-500 p-4">
-                您的浏览器不支持视频播放
-              </p>
-            </video>
+              onPause={handlePause}
+            />
           </div>
 
           {videoError && (
@@ -113,7 +150,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         <a
           href={`/api/proxy?url=${encodeURIComponent(
             kuaishouData.photoUrl || ""
-          )}&filename=${encodeURIComponent(
+          )}&referer=${encodeURIComponent("https://www.kuaishou.com/")}&filename=${encodeURIComponent(
             kuaishouData.caption || "kuaishou"
           )}&disposition=attachment`}
           download

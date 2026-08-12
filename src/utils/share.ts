@@ -40,7 +40,11 @@ export function hasValidVideoUrl(text: string): boolean {
     "b23.tv",
     "music.douyin.com",
     "h5.pipigx.com",
+    "h5.ippzone.com",
+    "ippzone.com",
+    "pipigx.com",
     "h5.pipix.com",
+    "pipix.com",
     "share.huoshan.com",
     "huoshan.com",
     "weishi.qq.com",
@@ -49,6 +53,10 @@ export function hasValidVideoUrl(text: string): boolean {
     "xspshare.baidu.com",
     "pearvideo.com",
     "huya.com",
+    "v.huya.com",
+    "douyu.com",
+    "v.douyu.com",
+    "vmobile.douyu.com",
     "acfun.cn",
     "meipai.com",
     "doupai.cc",
@@ -66,64 +74,133 @@ export function hasValidVideoUrl(text: string): boolean {
 }
 
 /**
- * 根据文本粗略检测平台（先匹配更具体的域名）
+ * 从分享文本中过滤提取出 URL 链接，再严格根据该 URL 的 Host 域名判定所属平台
  */
 export function detectPlatform(text: string): VideoPlatformKey {
-  const firstUrl = extractUrl(text) || "";
-  const lower = firstUrl.toLowerCase();
+  // 1. 优先从分享文本中过滤提取出干净的 URL
+  const rawUrl = extractUrl(text);
+  if (!rawUrl) return "douyin";
 
-  if (lower.includes("music.douyin.com")) return "qsmusic";
+  // 2. 解析提取出的 URL 主机名
+  let host = "";
+  try {
+    const href = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+    host = new URL(href).hostname.toLowerCase();
+  } catch { }
+
+  if (!host) return "douyin";
+
+  // 3. 严格基于提取出的 URL 域名判定平台 (特异性子域名优先匹配)
   if (
-    lower.includes("t.co/") ||
-    lower.includes("twitter.com/") ||
-    lower.includes("x.com/")
+    host === "qishui.douyin.com" ||
+    host.endsWith(".qishui.douyin.com") ||
+    host === "music.douyin.com" ||
+    host.endsWith(".music.douyin.com")
+  ) {
+    return "qsmusic";
+  }
+  if (host === "pipix.com" || host.endsWith(".pipix.com")) return "ppxia";
+  if (
+    host === "pipigx.com" ||
+    host.endsWith(".pipigx.com") ||
+    host === "ippzone.com" ||
+    host.endsWith(".ippzone.com")
+  ) {
+    return "pipigx";
+  }
+  if (
+    host === "twitter.com" ||
+    host.endsWith(".twitter.com") ||
+    host === "x.com" ||
+    host.endsWith(".x.com") ||
+    host === "t.co"
   ) {
     return "twitter";
   }
-  if (lower.includes("b23.tv") || lower.includes("bilibili.com"))
-    return "bilibili";
-  if (lower.includes("v.huya.com") || lower.includes("huya.com")) return "huya";
-  if (lower.includes("acfun.cn")) return "acfun";
-  if (lower.includes("pearvideo.com")) return "lishipin";
-  if (lower.includes("ixigua.com")) return "xigua";
-  if (lower.includes("huoshan.com") || lower.includes("share.huoshan.com"))
-    return "huoshan";
-  if (lower.includes("weishi.qq.com")) return "weishi";
-  if (lower.includes("xiaochuankeji.cn")) return "zuiyou";
-  if (lower.includes("xspshare.baidu.com")) return "quanmin";
   if (
-    lower.includes("haokan.baidu.com") ||
-    lower.includes("haokan.hao123.com")
+    (host === "douyin.com" ||
+      host.endsWith(".douyin.com") ||
+      host === "iesdouyin.com" ||
+      host.endsWith(".iesdouyin.com") ||
+      host === "snssdk.com") &&
+    !host.includes("qishui") &&
+    !host.includes("music")
   ) {
-    return "haokan";
-  }
-  if (lower.includes("meipai.com")) return "meipai";
-  if (lower.includes("doupai.cc")) return "doupai";
-  if (lower.includes("kg.qq.com")) return "quanminkge";
-  if (lower.includes("xinpianchang.com")) return "xinpianchang";
-  if (lower.includes("oasis.weibo.cn")) return "lvzhou";
-
-  try {
-    const href = firstUrl.startsWith("http")
-      ? firstUrl
-      : `https://${firstUrl}`;
-    const host = new URL(href).hostname.toLowerCase();
-    if (host === "weibo.cn") return "lvzhou";
-    if (host === "6.cn" || host.endsWith(".6.cn")) return "sixroom";
-  } catch {
-    /* ignore */
-  }
-
-  if (lower.includes("xhslink.com") || lower.includes("xiaohongshu.com"))
-    return "xhs";
-  if (lower.includes("video.weibo.com")) return "weibo";
-  if (lower.includes("weibo.com")) return "weibo";
-  if (lower.includes("v.kuaishou.com") || lower.includes("kuaishou.com"))
-    return "kuaishou";
-  if (lower.includes("h5.pipigx.com")) return "pipigx";
-  if (lower.includes("h5.pipix.com")) return "ppxia";
-  if (lower.includes("snssdk.com") || lower.includes("douyin.com"))
     return "douyin";
+  }
+  if (
+    host === "kuaishou.com" ||
+    host.endsWith(".kuaishou.com") ||
+    host === "kuaishoup.com"
+  ) {
+    return "kuaishou";
+  }
+  if (
+    host === "bilibili.com" ||
+    host.endsWith(".bilibili.com") ||
+    host === "b23.tv"
+  ) {
+    return "bilibili";
+  }
+  if (
+    host === "xiaohongshu.com" ||
+    host.endsWith(".xiaohongshu.com") ||
+    host === "xhslink.com"
+  ) {
+    return "xhs";
+  }
+  if (
+    host === "oasis.weibo.cn" ||
+    host.endsWith(".oasis.weibo.cn") ||
+    host === "oasis.weibo.com" ||
+    host.endsWith(".oasis.weibo.com") ||
+    host.includes("oasis")
+  ) {
+    return "lvzhou";
+  }
+  if (
+    (host === "weibo.com" ||
+      host.endsWith(".weibo.com") ||
+      host === "weibo.cn" ||
+      host.endsWith(".weibo.cn")) &&
+    !host.includes("oasis")
+  ) {
+    return "weibo";
+  }
+  if (host === "huya.com" || host.endsWith(".huya.com")) return "huya";
+  if (host === "douyu.com" || host.endsWith(".douyu.com")) return "douyu";
+  if (host === "acfun.cn" || host.endsWith(".acfun.cn")) return "acfun";
+  if (host === "pearvideo.com" || host.endsWith(".pearvideo.com")) return "lishipin";
+  if (host === "ixigua.com" || host.endsWith(".ixigua.com")) return "xigua";
+  if (host === "huoshan.com" || host.endsWith(".huoshan.com")) return "huoshan";
+  if (
+    host === "weishi.qq.com" ||
+    host.endsWith(".weishi.qq.com") ||
+    host.includes("weishi")
+  ) {
+    return "weishi";
+  }
+  if (
+    host === "izuiyou.com" ||
+    host.endsWith(".izuiyou.com") ||
+    host.endsWith(".xiaochuankeji.cn") ||
+    host.endsWith(".xiaochuankeji.com")
+  ) {
+    return "zuiyou";
+  }
+  if (host.includes("haokan.baidu.com") || host.includes("haokan.hao123.com")) return "haokan";
+  if (host.includes("quanmin.baidu.com") || host.includes("xspshare.baidu.com")) return "quanmin";
+  if (host === "meipai.com" || host.endsWith(".meipai.com")) return "meipai";
+  if (host === "doupai.cc" || host.endsWith(".doupai.cc")) return "doupai";
+  if (host === "kg.qq.com" || host.endsWith(".kg.qq.com")) return "quanminkge";
+  if (host === "6.cn" || host.endsWith(".6.cn")) return "sixroom";
+  if (host === "xinpianchang.com" || host.endsWith(".xinpianchang.com")) return "xinpianchang";
+
+  // 2. 降级包含匹配
+  const lower = rawUrl.toLowerCase();
+  if (lower.includes("music.douyin.com") || lower.includes("qishui.douyin.com")) return "qsmusic";
+  if (lower.includes("pipix.com")) return "ppxia";
+  if (lower.includes("pipigx.com") || lower.includes("ippzone.com")) return "pipigx";
 
   return "douyin";
 }

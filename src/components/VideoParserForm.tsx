@@ -23,28 +23,29 @@ interface VideoParserFormProps {
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_MAX = 20;
 
-// 读取缓存：命中且未过期返回数据，否则删除过期项
+// 读取缓存：命中且未过期且为成功结果才返回，否则彻底擦除
 function readCache(cacheKey: string): ApiResponse | null {
   const raw = sessionStorage.getItem(cacheKey);
   if (!raw) return null;
   try {
     const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(raw);
     if (Date.now() - parsed.timestamp < CACHE_TTL) {
-      return parsed.data;
+      if (parsed.data.code === 1 || parsed.data.code === 200) {
+        return parsed.data;
+      }
     }
-    // 过期：立即删除，避免堆积
+    // 失败记录或已过期：立即清理
     sessionStorage.removeItem(cacheKey);
   } catch {
-    // 损坏的缓存条目：删除
     sessionStorage.removeItem(cacheKey);
   }
   return null;
 }
 
-// 写入缓存：try/catch 防止 QuotaExceededError 中断流程；超限时清最旧条目
+// 写入缓存：仅对成功结果 (code 1 或 200) 写入缓存，严禁缓存失败异常
 function writeCache(cacheKey: string, data: ApiResponse) {
+  if (!data || (data.code !== 1 && data.code !== 200)) return;
   try {
-    // 粗略 LRU：达到上限时删除时间戳最旧的一条
     if (sessionStorage.length >= CACHE_MAX) {
       let oldestKey: string | null = null;
       let oldestTime = Infinity;
@@ -114,13 +115,13 @@ export default function VideoParserForm({
 
   // 解析函数（带缓存、重试、可取消）
   const parseVideo = useCallback(
-    async (url: string, platform: string, retryCount = 0) => {
-      if (!url) return;
+    async (targetUrl: string, targetPlatform: string, retryCount = 0) => {
+      if (!targetUrl) return;
 
       // 微信关注弹窗：每次发起解析都弹出（可关闭，不阻塞解析流程）
       showWxAuth().catch(() => {});
 
-      const cacheKey = `${platform}:${url}`;
+      const cacheKey = `${targetPlatform}:${targetUrl}`;
 
       // 命中缓存：直接返回，不发请求
       const cached = readCache(cacheKey);
@@ -129,17 +130,18 @@ export default function VideoParserForm({
         return;
       }
 
-      // 取消上一次进行中的请求，确保同一时刻只有一个解析
-      if (abortRef.current) abortRef.current.abort();
+      // 取消之前的挂起请求
+      cancelPending();
+
       const controller = new AbortController();
       abortRef.current = controller;
 
       setLoading(true);
-      onResult(null, "");
 
       try {
+        // 统一使用后端 /api/parse 路由进行智能识别与路由分发
         const response = await fetch(
-          `/api/${platform}?url=${encodeURIComponent(url)}`,
+          `/api/parse?url=${encodeURIComponent(targetUrl)}&platform=${targetPlatform}`,
           { signal: controller.signal }
         );
         const data: ApiResponse = await response.json();
@@ -148,7 +150,9 @@ export default function VideoParserForm({
         if (controller.signal.aborted) return;
 
         if (data.code === 1 || data.code === 200) {
-          data.platform = platform as VideoPlatformKey;
+          if (!data.platform && platform) {
+            data.platform = platform as VideoPlatformKey;
+          }
           onResult(data, "");
           writeCache(cacheKey, data);
         } else {
@@ -179,6 +183,7 @@ export default function VideoParserForm({
         }
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onResult, setLoading]
   );
 
@@ -269,6 +274,9 @@ export default function VideoParserForm({
 
   const handleClear = () => {
     cancelPending();
+    try {
+      sessionStorage.clear();
+    } catch {}
     setInput("");
     setUrl("");
     setDetectedPlatform(null);

@@ -37,6 +37,10 @@ async function acfunParse(shareUrl) {
     }
   }
 
+  if (videoUrl && videoUrl.startsWith("//")) {
+    videoUrl = "https:" + videoUrl;
+  }
+
   if (!videoUrl) {
     return { code: 404, msg: "未找到 AcFun 播放地址" };
   }

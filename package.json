@@ -8,19 +8,21 @@
   "license": "ISC",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
+    "test:live": "npx cross-env RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
     "test:watch": "vitest",
     "wrk:dev": "npx -y wrangler@4.29.1 dev --local",
     "wrk:deploy": "npx -y wrangler@4.29.1 deploy"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
+    "hls.js": "^1.5.18",
     "next": "^15.3.9",
+    "puppeteer-core": "^24.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "wx-auth-sdk": "^1.2.9"

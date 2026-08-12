@@ -60,9 +60,12 @@ async function getParser(platform) {
   // 动态导入对应平台的路由解析器（与实际目录名匹配）
   const platformRoutes = {
     douyin: () => import("@/app/api/douyin/route.js"),
+    qsmusic: () => import("@/app/api/qsmusic/route.js"),
     bilibili: () => import("@/app/api/bilibili/route.js"),
     xhs: () => import("@/app/api/xhs/route.js"),
+    redbook: () => import("@/app/api/xhs/route.js"),
     huya: () => import("@/app/api/huya/route.js"),
+    douyu: () => import("@/app/api/douyu/route.js"),
     haokan: () => import("@/app/api/haokan/route.js"),
     weibo: () => import("@/app/api/weibo/route.js"),
     weishi: () => import("@/app/api/weishi/route.js"),
@@ -112,7 +115,10 @@ async function unifiedParser(input, options = {}) {
   try {
     // 方式1: 直接传入 URL
     if (typeof input === "string" && (input.includes("://") || input.includes("."))) {
-      const platform = identifyPlatform(input);
+      let platform = identifyPlatform(input);
+      if (!platform && options.platform && platformRoutes[options.platform]) {
+        platform = options.platform;
+      }
 
       if (!platform) {
         return {
@@ -227,7 +233,8 @@ export async function GET(request) {
   }
 
   if (url) {
-    return createApiHandler((url) => unifiedParser(url))(request);
+    const userPlatform = searchParams.get("platform");
+    return createApiHandler((u) => unifiedParser(u, { platform: userPlatform }))(request);
   }
 
   if (source && id) {
