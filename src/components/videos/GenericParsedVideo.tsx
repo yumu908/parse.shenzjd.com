@@ -109,12 +109,12 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   const d = data?.data as GenericParsedData;
   const rawUrl = d?.url || "";
   const videoUrl = proxyUrl(rawUrl);
-  const images = d?.images?.filter(Boolean) || [];
 
   React.useEffect(() => {
     if (!videoUrl || !videoRef.current) return;
 
     const isM3u8 = rawUrl.toLowerCase().includes(".m3u8") || videoUrl.toLowerCase().includes(".m3u8");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let hls: any = null;
 
     if (isM3u8) {
@@ -131,12 +131,13 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               setVideoError(null);
             });
-            hls.on(Hls.Events.ERROR, (_: any, errData: any) => {
-              if (errData.fatal) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            hls.on(Hls.Events.ERROR, (_: unknown, errData: any) => {
+              if (errData?.fatal) {
                 setVideoError("m3u8 流媒体播放失败，可复制直链在浏览器打开");
               }
             });
-          } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+          } else if (videoRef.current?.canPlayType("application/vnd.apple.mpegurl")) {
             videoRef.current.src = videoUrl;
           }
         })
@@ -197,7 +198,6 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
             poster={proxyUrl(d.cover)}
             controls
             playsInline
-            referrerPolicy="no-referrer"
             className="w-full max-h-[70vh] bg-black"
             onError={() => {
               // 关键防护：如果视频实际已经缓冲加载 (readyState >= 2)，忽略浏览器打断引发的伪 onError 报错

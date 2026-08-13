@@ -11,11 +11,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  if (!data.data) {
-    return null;
-  }
-
-  const kuaishouData = data.data as KuaishouData;
+  const kuaishouData = data?.data as KuaishouData;
 
   const handleVideoError = (
     e: React.SyntheticEvent<HTMLVideoElement, Event>
@@ -33,10 +29,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const handlePause = () => setIsPlaying(false);
 
   React.useEffect(() => {
-    if (!kuaishouData.photoUrl || !videoRef.current) return;
+    if (!kuaishouData?.photoUrl || !videoRef.current) return;
 
     const rawUrl = kuaishouData.photoUrl;
     const isM3u8 = rawUrl.toLowerCase().includes(".m3u8");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let hls: any = null;
 
     if (isM3u8) {
@@ -54,12 +51,13 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               setVideoError(null);
             });
-            hls.on(Hls.Events.ERROR, (_: any, errData: any) => {
-              if (errData.fatal) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            hls.on(Hls.Events.ERROR, (_: unknown, errData: any) => {
+              if (errData?.fatal) {
                 setVideoError("m3u8 流媒体播放失败，可复制直链在浏览器打开");
               }
             });
-          } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+          } else if (videoRef.current?.canPlayType("application/vnd.apple.mpegurl")) {
             videoRef.current.src = `/api/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`;
           }
         })
@@ -77,7 +75,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         hls.destroy();
       }
     };
-  }, [kuaishouData.photoUrl]);
+  }, [kuaishouData?.photoUrl]);
+
+  if (!data.data) {
+    return null;
+  }
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>

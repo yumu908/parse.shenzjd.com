@@ -156,6 +156,12 @@ export const VIDEO_PLATFORMS = {
     color: "#1877f2",
     gradient: "from-[#1877f2] to-[#3b5998]",
   },
+  xinpianchang: {
+    name: "新片场",
+    emoji: "🎬",
+    color: "#e84393",
+    gradient: "from-[#e84393] to-[#fd79a8]",
+  },
 } as const;
 
 export type VideoPlatformKey = keyof typeof VIDEO_PLATFORMS;

@@ -1,0 +1,353 @@
+import { createApiHandler } from "@/lib/api-middleware";
+import { logger } from "@/lib/api-utils";
+import dns from "node:dns";
+
+// 强制采用 IPv4 节点，规避部分 Windows/Node 双栈网络连接超时
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {}
+
+export const runtime = "nodejs";
+
+// 移动端标准 Header (无矛盾的 sec-ch-ua 标头，完全规避 _$jsvmprt 虚拟机风控)
+const MOBILE_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "zh-CN,zh;q=0.9",
+};
+
+// 桌面端完全一致标头 (用于 www.douyin.com/video/{id})
+const DESKTOP_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "upgrade-insecure-requests": "1",
+};
+
+async function douyin(rawText) {
+  try {
+    const DOUYIN_COOKIE = process.env.DOUYIN_COOKIE || "";
+
+    // 1. 从 rawText 中提取包含的短链 / 目标链接
+    const urlMatch = rawText.match(/(https?:\/\/[^\s]+)/);
+    if (!urlMatch) {
+      return {
+        code: 400,
+        msg: "解析失败: 未识别到有效的抖音链接",
+      };
+    }
+    const inputUrl = urlMatch[1];
+
+    // 2. 解析短链或获取跳转后的 URL
+    let targetUrl = inputUrl;
+    if (inputUrl.includes("v.douyin.com")) {
+      targetUrl = await resolveShortLink(inputUrl, DOUYIN_COOKIE);
+    }
+
+    // 3. 提取 aweme_id (视频ID)
+    const awemeResult = extractAwemeId(targetUrl) || extractAwemeId(inputUrl);
+    const awemeId = awemeResult?.id || "";
+
+    let title = "";
+    let author = "未知作者";
+    let avatar = "";
+    let cover = "";
+    let videoUrl = "";
+    let images = [];
+    let music = { title: "原声", author: "未知音乐作者", avatar: "" };
+
+    let parsedItem = null;
+
+    // ---- 阶段 A: 尝试使用 抖音 Open API (iteminfo) ----
+    if (awemeId) {
+      parsedItem = await parseViaItemInfoApi(awemeId, DOUYIN_COOKIE);
+    }
+
+    // ---- 阶段 B: 尝试使用 抖音网页版 Detail API ----
+    if (!parsedItem && awemeId) {
+      parsedItem = await parseViaDetailApi(awemeId, DOUYIN_COOKIE);
+    }
+
+    // ---- 阶段 C: 蜘蛛 HTML 页面解析兜底 ----
+    if (!parsedItem) {
+      parsedItem = await parseViaSpider(targetUrl, awemeId, DOUYIN_COOKIE);
+    }
+
+    if (parsedItem) {
+      videoUrl = parsedItem.videoUrl || "";
+      title = parsedItem.title || "抖音视频";
+      author = parsedItem.author || author;
+      avatar = parsedItem.avatar || avatar;
+      cover = parsedItem.cover || cover;
+      images = parsedItem.images || [];
+      if (parsedItem.music) music = parsedItem.music;
+    }
+
+    if (!videoUrl && images.length === 0) {
+      return {
+        code: 404,
+        msg: "解析失败: 未找到视频或图集资源，视频可能已被删除或设为私密",
+      };
+    }
+
+    return {
+      code: 200,
+      msg: "解析成功",
+      data: {
+        title,
+        author,
+        avatar,
+        cover,
+        url: videoUrl,
+        images: images.length > 0 ? images : undefined,
+        music,
+      },
+    };
+  } catch (error) {
+    logger.error("Error in Douyin parsing logic:", error);
+    return { code: 500, msg: "服务器内部错误" };
+  }
+}
+
+/**
+ * 提取短链接 Location 跳转
+ */
+async function resolveShortLink(shortUrl, cookies) {
+  try {
+    const headers = { ...MOBILE_HEADERS };
+    if (cookies) headers.Cookie = cookies;
+
+    const res = await fetch(shortUrl, {
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(6000),
+    });
+
+    const location = res.headers.get("location");
+    if (location) {
+      logger.info(`[DouyinParser] 短链接跳转解析成功: ${shortUrl} -> ${location}`);
+      return location;
+    }
+  } catch (e) {
+    logger.error(`[DouyinParser] 短链接解析异常: ${e.message}`);
+  }
+  return shortUrl;
+}
+
+/**
+ * ParseViaItemInfoApiAsync
+ */
+async function parseViaItemInfoApi(awemeId, cookies) {
+  try {
+    const apiUrl = `https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids=${awemeId}`;
+    const headers = { ...MOBILE_HEADERS };
+    if (cookies) headers.Cookie = cookies;
+
+    const resp = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(5000) });
+    if (resp.ok) {
+      const text = await resp.text();
+      if (!text || !text.trim()) return null;
+      try {
+        const json = JSON.parse(text);
+        const item = json?.item_list?.[0];
+        if (item) {
+          return extractDataFromItemStruct(item, awemeId);
+        }
+      } catch (e) {}
+    }
+  } catch (ex) {
+    logger.error("[DouyinParser] ItemInfo API 发生异常", ex);
+  }
+  return null;
+}
+
+/**
+ * ParseViaDetailApiAsync
+ */
+async function parseViaDetailApi(awemeId, cookies) {
+  try {
+    const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}`;
+    const headers = { ...DESKTOP_HEADERS };
+    if (cookies) headers.Cookie = cookies;
+
+    const resp = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(5000) });
+    if (resp.ok) {
+      const text = await resp.text();
+      if (!text || !text.trim()) return null;
+      try {
+        const json = JSON.parse(text);
+        const detail = json?.aweme_detail;
+        if (detail) {
+          return extractDataFromItemStruct(detail, awemeId);
+        }
+      } catch (e) {}
+    }
+  } catch (ex) {
+    logger.error("[DouyinParser] Detail API 发生异常", ex);
+  }
+  return null;
+}
+
+/**
+ * ParseViaSpider (支持 iesdouyin.com 移动端与 douyin.com 桌面端轮询)
+ */
+async function parseViaSpider(targetUrl, awemeId, cookies) {
+  const tryTargets = [
+    { url: targetUrl, headers: MOBILE_HEADERS },
+    { url: `https://www.iesdouyin.com/share/video/${awemeId}`, headers: MOBILE_HEADERS },
+    { url: `https://www.douyin.com/video/${awemeId}`, headers: DESKTOP_HEADERS },
+  ].filter((t) => t.url && t.url.length > 10);
+
+  for (const itemTarget of tryTargets) {
+    try {
+      const headers = { ...itemTarget.headers };
+      if (cookies) headers.Cookie = cookies;
+
+      const response = await fetch(itemTarget.url, { headers, signal: AbortSignal.timeout(6000) });
+      const content = await response.text();
+
+      let extractedTitle = "";
+      const h1Match = content.match(/<h1[^>]*class="idrZUbq7"[^>]*>(.*?)<\/h1>/s);
+      if (h1Match) {
+        let rawH1 = h1Match[1].replace(/<.*?>/g, "");
+        rawH1 = decodeHtmlEntities(rawH1);
+        if (rawH1.includes("|")) rawH1 = rawH1.replace(/\|/g, " ");
+        extractedTitle = rawH1.replace(/#\S+/g, "").trim();
+      }
+
+      // 检索 _ROUTER_DATA, _RENDER_DATA 或 __APOLLO_STATE__
+      let routerMatch = content.match(/_ROUTER_DATA\s*=\s*(.*?)<\/script>/s);
+      if (!routerMatch) routerMatch = content.match(/_RENDER_DATA\s*=\s*(.*?)<\/script>/s);
+
+      if (routerMatch && routerMatch[1]) {
+        try {
+          let jsonStr = routerMatch[1].trim();
+          if (jsonStr.startsWith("%7B") || jsonStr.includes("%22")) {
+            jsonStr = decodeURIComponent(jsonStr);
+          }
+          if (jsonStr.endsWith(";")) jsonStr = jsonStr.slice(0, -1);
+
+          const data = JSON.parse(jsonStr);
+          const itemList =
+            data?.loaderData?.videoIdPage?.videoInfoRes?.itemList ||
+            data?.loaderData?.video_id_page?.video_info_res?.item_list ||
+            findKeyRecursive(data, "itemList") ||
+            findKeyRecursive(data, "item_list");
+
+          const item = Array.isArray(itemList) ? itemList[0] : null;
+          if (item) {
+            const res = extractDataFromItemStruct(item, awemeId);
+            if (extractedTitle) res.title = extractedTitle;
+            return res;
+          }
+        } catch (e) {
+          logger.warn(`Spider JSON parse error: ${e.message}`);
+        }
+      }
+
+      // 正则直接提取 play_addr
+      const playAddrMatch = content.match(/"play_addr":\s*\{\s*"url_list":\s*\[\s*"([^"]+)"/);
+      if (playAddrMatch) {
+        let rawUrl = unescapeString(playAddrMatch[1]);
+        let finalUrl = rawUrl.replace(/playwm/g, "play");
+        return {
+          videoUrl: finalUrl,
+          title: extractedTitle || `douyin_video_${awemeId}`,
+        };
+      }
+    } catch (ex) {
+      logger.error(`[DouyinParser] Spider 尝试 ${itemTarget.url} 发生异常`, ex);
+    }
+  }
+  return null;
+}
+
+function findKeyRecursive(data, keyName) {
+  if (!data || typeof data !== "object") return null;
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const res = findKeyRecursive(item, keyName);
+      if (res) return res;
+    }
+  } else {
+    for (const key of Object.keys(data)) {
+      if (key.toLowerCase() === keyName.toLowerCase()) {
+        return data[key];
+      }
+      const res = findKeyRecursive(data[key], keyName);
+      if (res) return res;
+    }
+  }
+  return null;
+}
+
+function extractDataFromItemStruct(item, fallbackId = "") {
+  const title = item.desc || item.title || `douyin_video_${fallbackId}`;
+  const author = item.author?.nickname || item.author?.unique_id || "未知作者";
+  const avatar =
+    item.author?.avatar_thumb?.url_list?.[0] ||
+    item.author?.avatar_medium?.url_list?.[0] ||
+    "";
+  const cover =
+    item.video?.cover?.url_list?.[0] ||
+    item.video?.origin_cover?.url_list?.[0] ||
+    "";
+
+  let videoUrl = "";
+  const urlList =
+    item.video?.play_addr?.url_list || item.video?.play_addr_lowbr?.url_list;
+
+  if (Array.isArray(urlList) && urlList.length > 0) {
+    videoUrl = (urlList[0] || "").replace(/playwm/g, "play");
+  }
+
+  const images = (item.images || [])
+    .map((img) => img.url_list?.[0])
+    .filter(Boolean);
+
+  const music = {
+    title: item.music?.title || "原声",
+    author: item.music?.author || "未知音乐作者",
+    avatar: item.music?.cover_large?.url_list?.[0] || "",
+  };
+
+  return { title, author, avatar, cover, videoUrl, images, music };
+}
+
+function extractAwemeId(urlStr) {
+  const match = urlStr.match(/(?:video|note|story|modal_id=)\/?(\d+)/) || urlStr.match(/(\d{18,19})/);
+  if (match) {
+    const isNote = urlStr.includes("note");
+    return { id: match[1], type: isNote ? "note" : "video" };
+  }
+  return null;
+}
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'");
+}
+
+function unescapeString(str) {
+  return str
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u002F/gi, "/")
+    .replace(/\\/g, "");
+}
+
+export const GET = createApiHandler(douyin);
