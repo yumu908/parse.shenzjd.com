@@ -4,6 +4,8 @@
 
 在线体验：[https://parse.shenzjd.com](https://parse.shenzjd.com)
 
+Mine备用：[https://parse-shenzjd-com-two.vercel.app/](https://parse-shenzjd-com-two.vercel.app/)
+
 > 免责声明：本项目仅用于技术学习与搜索聚合演示，不存储、不传播任何受版权保护的内容。请勿用于商业或侵权用途。
 
 ## 支持平台
