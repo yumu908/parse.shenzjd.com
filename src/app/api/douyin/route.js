@@ -90,10 +90,10 @@ async function douyin(url) {
         // 判断 _ROUTER_DATA 是否包含有效视频数据
         // 抖音二次握手下，首次请求只下发 ttwid cookie、数据为空壳，需带 cookie 重试
         const hasValidData = (info) => {
-            if (!info ? .loaderData) return false;
+            if (!info?.loaderData) return false;
             const keys = ["video_(id)/page", "note_(id)/page", "story_(id)/page"];
             return keys.some(
-                (k) => info.loaderData[k] ? .videoInfoRes ? .item_list ? .length > 0
+                (k) => info.loaderData[k]?.videoInfoRes?.item_list?.length > 0
             );
         };
 
@@ -208,7 +208,7 @@ function parseVideoData(videoInfo) {
         ];
         let videoData = null;
         for (const key of loaderKeys) {
-            const item = videoInfo.loaderData[key] ? .videoInfoRes ? .item_list ? . [0];
+            const item = videoInfo.loaderData[key]?.videoInfoRes?.item_list?.[0];
             if (item) {
                 videoData = item;
                 break;
@@ -227,13 +227,13 @@ function parseVideoData(videoInfo) {
         // aweme_type: 0=普通视频, 1=图文, 2=图文(实况图/动图), 4=故事
         // 同时检查 video.duration > 0 排除只有音乐占位的情况
         const awemeType = videoData.aweme_type;
-        const hasRealVideo = !!videoData.video ? .play_addr ? .url_list ? . [0] &&
+        const hasRealVideo = !!videoData.video?.play_addr?.url_list?.[0] &&
             (videoData.video.duration || 0) > 0;
         const isImageType = awemeType === 1 || awemeType === 2;
         const isVideo = !isImageType && hasRealVideo;
         const images =
             Array.isArray(videoData.images) ?
-            videoData.images.map((img) => img.url_list ? . [0]).filter(Boolean) : [];
+            videoData.images.map((img) => img.url_list?.[0]).filter(Boolean) : [];
 
         if (!isVideo && images.length === 0) {
             return {
@@ -252,21 +252,21 @@ function parseVideoData(videoInfo) {
             data: {
                 author: videoData.author.nickname || "未知作者",
                 uid: videoData.author.unique_id || "",
-                avatar: videoData.author.avatar_medium ? .url_list ? . [0] || "",
-                like: videoData.statistics ? .digg_count || 0,
+                avatar: videoData.author.avatar_medium?.url_list?.[0] || "",
+                like: videoData.statistics?.digg_count || 0,
                 time: videoData.create_time || 0,
                 title: videoData.desc || "无标题",
                 cover: isVideo ?
-                    videoData.video.cover ? .url_list ? . [0] || "" :
+                    videoData.video.cover?.url_list?.[0] || "" :
                     images[0] || "",
                 type: isVideo ? "video" : "image",
                 url: videoResUrl || undefined,
                 images: images.length > 0 ? images : undefined,
                 // 视频时长（毫秒），前端据此判断长视频不走代理、引导新窗口播放
-                duration: videoData.video ? .duration || 0,
+                duration: videoData.video?.duration || 0,
                 music: {
-                    author: videoData.music ? .author || "未知音乐作者",
-                    avatar: videoData.music ? .cover_large ? .url_list ? . [0] || "",
+                    author: videoData.music?.author || "未知音乐作者",
+                    avatar: videoData.music?.cover_large?.url_list?.[0] || "",
                 },
             },
         };
@@ -285,7 +285,7 @@ function parseVideoData(videoInfo) {
 function extractFilterReason(videoInfo) {
     for (const val of Object.values(videoInfo.loaderData || {})) {
         if (val && typeof val === "object") {
-            const filterList = val.videoInfoRes ? .filter_list;
+            const filterList = val.videoInfoRes?.filter_list;
             if (Array.isArray(filterList) && filterList.length > 0) {
                 return filterList.map((f) => f.filter_reason).join("; ");
             }
