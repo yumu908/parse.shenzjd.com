@@ -31,6 +31,13 @@ function readCache(cacheKey: string): ApiResponse | null {
     const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(raw);
     if (Date.now() - parsed.timestamp < CACHE_TTL) {
       if (parsed.data.code === 1 || parsed.data.code === 200) {
+        // 如果缓存包含旧平台字段 (photoUrl / coverUrl / caption)，立即抛弃并重查
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const innerData = parsed.data.data as any;
+        if (innerData && (innerData.photoUrl || innerData.coverUrl || innerData.caption)) {
+          sessionStorage.removeItem(cacheKey);
+          return null;
+        }
         return parsed.data;
       }
     }
@@ -141,7 +148,7 @@ export default function VideoParserForm({
       try {
         // 统一使用后端 /api/parse 路由进行智能识别与路由分发
         const response = await fetch(
-          `/api/parse?url=${encodeURIComponent(targetUrl)}&platform=${targetPlatform}`,
+          `/api/parse?url=${encodeURIComponent(targetUrl)}`,
           { signal: controller.signal }
         );
         const data: ApiResponse = await response.json();
@@ -150,9 +157,6 @@ export default function VideoParserForm({
         if (controller.signal.aborted) return;
 
         if (data.code === 1 || data.code === 200) {
-          if (!data.platform && platform) {
-            data.platform = platform as VideoPlatformKey;
-          }
           onResult(data, "");
           writeCache(cacheKey, data);
         } else {

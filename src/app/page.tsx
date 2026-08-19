@@ -15,11 +15,17 @@ import {
 import { ApiResponse } from "@/types/api";
 import { VIDEO_PLATFORMS } from "@/config/video-platforms";
 
+import { detectPlatform } from "@/utils/share";
+
 // 平台名称单一数据源：从配置读取，避免与代码脱节（之前 README/SEO 只列了 7 个，实际 24 个）
 const PLATFORM_NAMES = Object.values(VIDEO_PLATFORMS).map((p) => p.name);
 
 function renderPlatformResult(result: ApiResponse) {
-  switch (result.platform) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawUrl = (result.data as any)?.url || (result.data as any)?.images?.[0] || "";
+  const platformKey = result.platform || (rawUrl ? detectPlatform(rawUrl) : null);
+
+  switch (platformKey) {
     case "bilibili":
       return <BilibiliVideo data={result} />;
     case "douyin":
@@ -37,9 +43,6 @@ function renderPlatformResult(result: ApiResponse) {
     case "ppxia":
       return <PpxiaVideo data={result} />;
     default:
-      // 头部 8 个平台有专属 UI；其余平台（huya/acfun/xigua/twitter 等）
-      // 后端返回的都是 GenericParsedData 扁平结构，由 GenericParsedVideo 统一渲染。
-      // 如需为某平台定制，新增对应组件并在此补充 case 即可。
       return <GenericParsedVideo data={result} />;
   }
 }
