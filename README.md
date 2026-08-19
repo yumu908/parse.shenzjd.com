@@ -56,7 +56,7 @@ npm start
 
 ### Cloudflare（Workers）
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yumu908/parse.shenzjd.com)
 
 - 点击上方按钮，按向导授权并创建项目即可自动构建与发布。
 - 若你已 fork 本仓库，点击后可在向导中选择你的 fork 进行部署。
