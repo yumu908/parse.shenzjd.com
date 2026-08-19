@@ -6,11 +6,39 @@ async function initDOMParser() {
 }
 
 export function formatResponse(code = 200, msg = "解析成功", data = []) {
+  let formattedData = data;
+  if (code === 200 && data && typeof data === "object" && !Array.isArray(data)) {
+    const rawUrl = data.url || data.photoUrl || data.playUrl || data.videoUrl || data.mp4Url || "";
+    const rawCover = data.cover || data.coverUrl || data.poster || data.thumbnail || "";
+    const rawTitle = data.title || data.caption || "";
+    const rawAuthor = data.author || data.authorName || data.name || "";
+    const rawAvatar = data.avatar || data.authorAvatar || data.headUrl || "";
+    const rawUid = data.uid || data.kwaiId || data.authorId || "";
+    const rawLike = data.like !== undefined ? Number(data.like) : (data.likeCount !== undefined ? Number(data.likeCount) : 0);
+    const rawTime = data.time || data.createTime || data.timestamp || 0;
+    const rawType = data.type || (data.images && data.images.length > 0 ? "image" : "video");
+    const rawDuration = data.duration || 0;
+
+    formattedData = {
+      author: rawAuthor,
+      uid: rawUid,
+      avatar: rawAvatar,
+      like: rawLike,
+      time: rawTime,
+      title: rawTitle,
+      cover: rawCover,
+      type: rawType,
+      url: rawUrl || undefined,
+      images: data.images && data.images.length > 0 ? data.images : undefined,
+      duration: rawDuration,
+      music: data.music || undefined,
+    };
+  }
+
   return {
     code,
     msg,
-    data,
-    platform: "kuaishou",
+    data: formattedData,
   };
 }
 

@@ -205,7 +205,9 @@ export function detectPlatform(text: string): VideoPlatformKey {
   if (
     host === "izuiyou.com" ||
     host.endsWith(".izuiyou.com") ||
+    host === "xiaochuankeji.cn" ||
     host.endsWith(".xiaochuankeji.cn") ||
+    host === "xiaochuankeji.com" ||
     host.endsWith(".xiaochuankeji.com")
   ) {
     return "zuiyou";

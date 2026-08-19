@@ -141,8 +141,8 @@ async function unifiedParser(input, options = {}) {
 
       // 调用对应的解析函数
       const result = await parser(input);
-      if (result && result.platform === undefined) {
-        result.platform = platform;
+      if (result && result.platform !== undefined) {
+        delete result.platform;
       }
       return result;
     }

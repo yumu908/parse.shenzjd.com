@@ -110,8 +110,8 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.ZUIYOU]: {
     name: "最右",
     nameEn: "Zuiyou",
-    domains: ["izuiyou.com", "xiaochuankeji.com"],
-    shortDomains: ["share.xiaochuankeji.cn"],
+    domains: ["izuiyou.com", "xiaochuankeji.com", "xiaochuankeji.cn"],
+    shortDomains: ["share.xiaochuankeji.cn", "h5.xiaochuankeji.cn"],
     supportsIdParse: false,
   },
   [PLATFORMS.LISHI_PIN]: {
@@ -152,7 +152,7 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.WEIBO]: {
     name: "微博",
     nameEn: "Weibo",
-    domains: ["weibo.com", "m.weibo.com"],
+    domains: ["weibo.com", "weibo.cn", "m.weibo.com", "m.weibo.cn", "video.weibo.com"],
     shortDomains: [],
     supportsIdParse: true,
   },

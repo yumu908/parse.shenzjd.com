@@ -60,11 +60,17 @@ export interface DouyinData {
 
 // 快手数据类型
 export interface KuaishouData {
-  photoUrl: string;
-  caption: string;
-  coverUrl: string;
-  source?: string;
-  authorName?: string;
+  author?: string;
+  avatar?: string;
+  uid?: string;
+  like?: number;
+  time?: number;
+  title?: string;
+  cover?: string;
+  url?: string;
+  type?: "video" | "image";
+  duration?: number;
+  images?: string[];
 }
 
 // 微博数据类型

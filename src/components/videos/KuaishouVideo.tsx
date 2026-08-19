@@ -12,6 +12,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const kuaishouData = data?.data as KuaishouData;
+  const rawUrl = kuaishouData?.url || "";
+  const coverUrl = kuaishouData?.cover || "";
+  const title = kuaishouData?.title || "";
+  const authorName = kuaishouData?.author || "";
+  const avatar = kuaishouData?.avatar || "";
 
   const handleVideoError = (
     e: React.SyntheticEvent<HTMLVideoElement, Event>
@@ -29,9 +34,8 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const handlePause = () => setIsPlaying(false);
 
   React.useEffect(() => {
-    if (!kuaishouData?.photoUrl || !videoRef.current) return;
+    if (!rawUrl || !videoRef.current) return;
 
-    const rawUrl = kuaishouData.photoUrl;
     const isM3u8 = rawUrl.toLowerCase().includes(".m3u8");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let hls: any = null;
@@ -75,7 +79,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         hls.destroy();
       }
     };
-  }, [kuaishouData?.photoUrl]);
+  }, [rawUrl]);
 
   if (!data.data) {
     return null;
@@ -84,35 +88,43 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info */}
-      {kuaishouData.authorName && (
+      {authorName && (
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">
-              <span className="text-white text-sm font-bold">快</span>
-            </div>
+            {avatar ? (
+              <img
+                src={`/api/proxy?url=${encodeURIComponent(avatar)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`}
+                alt={authorName}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">
+                <span className="text-white text-sm font-bold">快</span>
+              </div>
+            )}
             <div>
               <p className="text-xs text-muted">作者</p>
-              <p className="text-sm font-medium text-primary">{kuaishouData.authorName}</p>
+              <p className="text-sm font-medium text-primary">{authorName}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Video Title */}
-      {kuaishouData.caption && (
+      {title && (
         <div className="glass-card p-4">
-          <p className="text-sm text-primary line-clamp-2">{kuaishouData.caption}</p>
+          <p className="text-sm text-primary line-clamp-2">{title}</p>
         </div>
       )}
 
       {/* Video Player */}
-      {kuaishouData.photoUrl && (
+      {rawUrl && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
           <div className="aspect-[9/16] sm:aspect-video w-full">
             <video
               ref={videoRef}
               controls
-              poster={kuaishouData.coverUrl ? `/api/proxy?url=${encodeURIComponent(kuaishouData.coverUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}` : undefined}
+              poster={coverUrl ? `/api/proxy?url=${encodeURIComponent(coverUrl)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}` : undefined}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
@@ -128,7 +140,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
               <div className="text-center text-white p-6">
                 <p className="mb-4 text-sm">{videoError}</p>
                 <a
-                  href={kuaishouData.photoUrl}
+                  href={rawUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ff6600] hover:bg-[#e65c00] text-white rounded-xl transition-all duration-300">
@@ -151,9 +163,9 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
       <div className="flex flex-col sm:flex-row gap-3">
         <a
           href={`/api/proxy?url=${encodeURIComponent(
-            kuaishouData.photoUrl || ""
+            rawUrl
           )}&referer=${encodeURIComponent("https://www.kuaishou.com/")}&filename=${encodeURIComponent(
-            kuaishouData.caption || "kuaishou"
+            title || "kuaishou"
           )}&disposition=attachment`}
           download
           rel="noopener noreferrer"
@@ -173,9 +185,9 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
           下载视频
         </a>
 
-        {kuaishouData.photoUrl && (
+        {rawUrl && (
           <a
-            href={kuaishouData.photoUrl}
+            href={rawUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle">

@@ -92,6 +92,18 @@ const cases: ShareParseCase[] = [
     expectUrl:
       "https://video.weibo.com/show?fid=1034:4912345678901234&from=old_pc_videoshow",
   },
+  {
+    name: "lvzhou-m.oasis.weibo.cn链接",
+    input: "https://m.oasis.weibo.cn/v1/h5/share?sid=5329283053525813",
+    expectPlatform: "lvzhou",
+    expectUrl: "https://m.oasis.weibo.cn/v1/h5/share?sid=5329283053525813",
+  },
+  {
+    name: "zuiyou-share.xiaochuankeji.cn链接",
+    input: "https://share.xiaochuankeji.cn/hybrid/share/post?pid=422986556&vid=2540460610",
+    expectPlatform: "zuiyou",
+    expectUrl: "https://share.xiaochuankeji.cn/hybrid/share/post?pid=422986556&vid=2540460610",
+  },
   // 小红书
   {
     name: "xhs-短链-xhslink",

@@ -15,8 +15,7 @@
 {
   "code": 200,
   "msg": "解析成功",
-  "data": { ... },
-  "platform": "douyin"
+  "data": { ... }
 }
 ```
 
@@ -65,7 +64,6 @@ GET /api/douyin?url=https://v.douyin.com/kB9dI20w7vk/
 {
   "code": 200,
   "msg": "解析成功",
-  "platform": "douyin",
   "data": {
     "author": "作者昵称",
     "uid": "用户ID",
@@ -74,7 +72,9 @@ GET /api/douyin?url=https://v.douyin.com/kB9dI20w7vk/
     "time": 1703980800,
     "title": "视频标题",
     "cover": "封面URL",
+    "type": "video",
     "url": "视频播放地址",
+    "duration": 61500,
     "music": {
       "author": "音乐作者",
       "avatar": "音乐封面"
@@ -154,12 +154,17 @@ GET /api/kuaishou?url=https://v.kuaishou.com/abcdEF
 {
   "code": 200,
   "msg": "解析成功",
-  "platform": "kuaishou",
   "data": {
-    "photoUrl": "视频播放地址",
-    "caption": "视频标题",
-    "coverUrl": "封面URL",
-    "authorName": "作者名称"
+    "author": "作者昵称",
+    "uid": "用户ID",
+    "avatar": "头像URL",
+    "like": 1234,
+    "time": 1703980800,
+    "title": "视频标题",
+    "cover": "封面URL",
+    "type": "video",
+    "url": "视频播放地址",
+    "duration": 15000
   }
 }
 ```

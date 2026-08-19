@@ -85,7 +85,6 @@ describe("parse route", () => {
     expect(json).toMatchObject({
       code: 200,
       msg: "解析成功",
-      platform: "douyin",
       data: {
         author: "作者",
         title: "测试视频",
@@ -103,5 +102,33 @@ describe("parse route", () => {
 
     const json = await res.json();
     expect(json.msg).toContain("ID 解析模式");
+  });
+
+  it("formats kuaishou response to match douyin data structure", async () => {
+    const { formatResponse } = await import("@/lib/kuaishouCore.js");
+    const res = formatResponse(200, "解析成功", {
+      photoUrl: "https://example.com/kuaishou.mp4",
+      coverUrl: "https://example.com/cover.jpg",
+      caption: "#信鸽归家 #磁力万合计划",
+      authorName: "测试作者",
+      source: "broad-search-mp4",
+    });
+
+    expect(res).toEqual({
+      code: 200,
+      msg: "解析成功",
+      data: {
+        author: "测试作者",
+        uid: "",
+        avatar: "",
+        like: 0,
+        time: 0,
+        title: "#信鸽归家 #磁力万合计划",
+        cover: "https://example.com/cover.jpg",
+        type: "video",
+        url: "https://example.com/kuaishou.mp4",
+        duration: 0,
+      },
+    });
   });
 });
