@@ -100,7 +100,7 @@ async function getBilibiliVideoInfo(url) {
                 headers
             );
 
-            if (playUrl && playUrl.data ? .durl ? . [0] ? .url) {
+            if (playUrl && playUrl.data?.durl?.[0]?.url) {
                 // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
                 const url = playUrl.data.durl[0].url;
                 return {
@@ -126,16 +126,16 @@ async function getBilibiliVideoInfo(url) {
             msg: "解析成功",
             platform: "bilibili",
             data: {
-                author: videoInfo.data.owner ? .name || "未知作者",
-                uid: String(videoInfo.data.owner ? .mid || ""),
-                avatar: videoInfo.data.owner ? .face || "",
-                like: videoInfo.data.stat ? .like || 0,
+                author: videoInfo.data.owner?.name || "未知作者",
+                uid: String(videoInfo.data.owner?.mid || ""),
+                avatar: videoInfo.data.owner?.face || "",
+                like: videoInfo.data.stat?.like || 0,
                 time: videoInfo.data.pubdate || 0,
                 title: videoInfo.data.title || "无标题",
                 cover: videoInfo.data.pic || "",
                 type: "video",
-                url: firstPage ? .url || "",
-                duration: firstPage ? .duration || 0,
+                url: firstPage?.url || "",
+                duration: firstPage?.duration || 0,
                 pages: pages.length > 0 ? pages : undefined,
             },
         };

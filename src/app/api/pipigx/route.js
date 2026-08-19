@@ -80,7 +80,7 @@ async function pipigxParse(url) {
         };
     }
 
-    if (!response ? .data ? .post) {
+    if (!response?.data?.post) {
         return {
             code: 404,
             msg: "未找到视频数据"
@@ -99,7 +99,7 @@ async function pipigxParse(url) {
         for (const item of videoList) {
             if (!item) continue;
             const v = Array.isArray(item) ? item[0] : item;
-            if (v ? .url) {
+            if (v?.url) {
                 videoUrl = v.url;
                 if (v.thumb) {
                     coverUrl = `https://file.ippzone.com/img/frame/id/${v.thumb}`;

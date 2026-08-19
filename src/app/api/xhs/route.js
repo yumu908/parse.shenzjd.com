@@ -100,7 +100,7 @@ function resolveNotePayload(decoded) {
     const detailMap = safeGet(decoded, "note.noteDetailMap");
     if (noteId && detailMap && typeof detailMap === "object") {
         const entry = detailMap[noteId];
-        if (entry ? .note && typeof entry.note === "object") {
+        if (entry?.note && typeof entry.note === "object") {
             return entry.note;
         }
         // 有些版本 note 直接挂在 entry 下
@@ -116,8 +116,8 @@ function resolveNotePayload(decoded) {
         safeGet(decoded, "noteDetail.data") ||
         safeGet(decoded, "data.noteData") ||
         // 更多兜底路径
-        safeGet(decoded, "note.noteDetailMap") ? . [noteId] ? .note ||
-        safeGet(decoded, "note.noteDetailMap") ? . [noteId] ||
+        safeGet(decoded, "note.noteDetailMap")?.[noteId]?.note ||
+        safeGet(decoded, "note.noteDetailMap")?.[noteId] ||
         safeGet(decoded, "note") ||
         null
     );
@@ -127,7 +127,7 @@ function extractInitialStateJson(html) {
     // 取到下一个 </script>，避免对大段 JSON 做错误的非贪婪 `}` 截断
     const re = /window\.__INITIAL_STATE__\s*=\s*(.*?)<\/script>/is;
     const m = html.match(re);
-    if (m ? . [1]) {
+    if (m?.[1]) {
         return m[1].trim();
     }
     // 兼容旧版 script 标签格式
@@ -135,7 +135,7 @@ function extractInitialStateJson(html) {
         /<script>\s*window\.__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/i.exec(
             html
         );
-    if (legacy ? . [1]) {
+    if (legacy?.[1]) {
         return legacy[1].trim();
     }
     // 兼容单行 script 格式
@@ -143,7 +143,7 @@ function extractInitialStateJson(html) {
         /<script[^>]*>\s*window\.__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/i.exec(
             html
         );
-    return inline ? . [1] ? .trim() ? ? null;
+    return inline?.[1]?.trim() ?? null;
 }
 
 async function xhs(url) {
@@ -154,7 +154,7 @@ async function xhs(url) {
         } = await fetchXhsNoteHtml(url);
 
         console.log("[xhs] finalUrl:", finalUrl);
-        console.log("[xhs] html length:", html ? .length || 0);
+        console.log("[xhs] html length:", html?.length || 0);
 
         if (!html) {
             return output(400, "请求失败，未获取到页面内容");
