@@ -1,138 +1,156 @@
-import { createApiHandler } from "@/lib/api-middleware";
-import { logger } from "@/lib/api-utils";
-
-export const runtime = "edge";
+import {
+    createApiHandler
+} from "@/lib/api-middleware";
+import {
+    logger
+} from "@/lib/api-utils";
 
 // 从环境变量获取配置
-const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT || 
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36";
+const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT ||
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36";
 
 const BILIBILI_COOKIE = process.env.BILIBILI_COOKIE || "";
 
 function cleanUrlParameters(url) {
-  try {
-    const parsed = new URL(url);
-    parsed.username = "";
-    parsed.password = "";
-    parsed.search = "";
-    parsed.pathname = parsed.pathname.replace(/\/$/, "");
-    return parsed.toString();
-  } catch (error) {
-    logger.error("Error cleaning URL:", error.message);
-    return url;
-  }
+    try {
+        const parsed = new URL(url);
+        parsed.username = "";
+        parsed.password = "";
+        parsed.search = "";
+        parsed.pathname = parsed.pathname.replace(/\/$/, "");
+        return parsed.toString();
+    } catch (error) {
+        logger.error("Error cleaning URL:", error.message);
+        return url;
+    }
 }
 
 async function bilibiliRequest(url, headers) {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        ...headers,
-        "User-Agent": BILIBILI_USER_AGENT,
-        Cookie: BILIBILI_COOKIE,
-      },
-    });
-    return await response.json();
-  } catch (error) {
-    logger.error("Error making bilibili request:", error.message);
-    return null;
-  }
+    try {
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                "User-Agent": BILIBILI_USER_AGENT,
+                Cookie: BILIBILI_COOKIE,
+            },
+        });
+        return await response.json();
+    } catch (error) {
+        logger.error("Error making bilibili request:", error.message);
+        return null;
+    }
 }
 
 async function getBilibiliVideoInfo(url) {
-  try {
-    const cleanUrl = cleanUrlParameters(url);
-    const parsedUrl = new URL(cleanUrl);
-    let bvid;
-    
-    if (parsedUrl.hostname === "b23.tv") {
-      const response = await fetch(url, { redirect: "follow" });
-      const redirectUrl = new URL(response.url);
-      bvid = redirectUrl.pathname;
-    } else if (
-      parsedUrl.hostname === "www.bilibili.com" ||
-      parsedUrl.hostname === "m.bilibili.com"
-    ) {
-      bvid = parsedUrl.pathname;
-    } else {
-      return { code: -1, msg: "视频链接好像不太对！" };
-    }
-    
-    if (!bvid.includes("/video/")) {
-      return { code: -1, msg: "好像不是视频链接" };
-    }
-    
-    bvid = bvid.replace("/video/", "");
-    logger.log("Processing bilibili video, bvid:", bvid);
-    
-    const headers = { "Content-Type": "application/json;charset=UTF-8" };
-    
-    // 获取视频信息
-    const videoInfo = await bilibiliRequest(
-      `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
-      headers
-    );
-    
-    if (!videoInfo || videoInfo.code !== 0) {
-      logger.warn("Failed to fetch video info, response:", videoInfo);
-      return { code: 0, msg: "解析失败！" };
-    }
-    
-    // 并行获取所有分P的播放地址
-    const playUrlPromises = videoInfo.data.pages.map(async (page) => {
-      const playUrl = await bilibiliRequest(
-        `https://api.bilibili.com/x/player/playurl?otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`,
-        headers
-      );
-      
-      if (playUrl && playUrl.data?.durl?.[0]?.url) {
-        // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
-        const url = playUrl.data.durl[0].url;
-        return {
-          title: page.part,
-          duration: page.duration,
-          durationFormat: new Date((page.duration - 1) * 1000)
-            .toISOString()
-            .substr(11, 8),
-          accept: playUrl.data.accept_description,
-          url,
+    try {
+        const cleanUrl = cleanUrlParameters(url);
+        const parsedUrl = new URL(cleanUrl);
+        let bvid;
+
+        if (parsedUrl.hostname === "b23.tv") {
+            const response = await fetch(url, {
+                redirect: "follow"
+            });
+            const redirectUrl = new URL(response.url);
+            bvid = redirectUrl.pathname;
+        } else if (
+            parsedUrl.hostname === "www.bilibili.com" ||
+            parsedUrl.hostname === "m.bilibili.com"
+        ) {
+            bvid = parsedUrl.pathname;
+        } else {
+            return {
+                code: -1,
+                msg: "视频链接好像不太对！"
+            };
+        }
+
+        if (!bvid.includes("/video/")) {
+            return {
+                code: -1,
+                msg: "好像不是视频链接"
+            };
+        }
+
+        bvid = bvid.replace("/video/", "");
+        logger.log("Processing bilibili video, bvid:", bvid);
+
+        const headers = {
+            "Content-Type": "application/json;charset=UTF-8"
         };
-      }
-      return null;
-    });
-    
-    const pages = (await Promise.all(playUrlPromises)).filter(Boolean);
-    const firstPage = pages[0];
-    
-    logger.log("Successfully parsed bilibili video, pages:", pages.length);
-    
-    return {
-      code: 200,
-      msg: "解析成功",
-      platform: "bilibili",
-      data: {
-        author: videoInfo.data.owner?.name || "未知作者",
-        uid: String(videoInfo.data.owner?.mid || ""),
-        avatar: videoInfo.data.owner?.face || "",
-        like: videoInfo.data.stat?.like || 0,
-        time: videoInfo.data.pubdate || 0,
-        title: videoInfo.data.title || "无标题",
-        cover: videoInfo.data.pic || "",
-        type: "video",
-        url: firstPage?.url || "",
-        duration: firstPage?.duration || 0,
-        pages: pages.length > 0 ? pages : undefined,
-      },
-    };
-  } catch (error) {
-    logger.error("Error parsing bilibili video:", error.message);
-    return { code: 500, msg: "解析失败！" };
-  }
+
+        // 获取视频信息
+        const videoInfo = await bilibiliRequest(
+            `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+            headers
+        );
+
+        if (!videoInfo || videoInfo.code !== 0) {
+            logger.warn("Failed to fetch video info, response:", videoInfo);
+            return {
+                code: 0,
+                msg: "解析失败！"
+            };
+        }
+
+        // 并行获取所有分P的播放地址
+        const playUrlPromises = videoInfo.data.pages.map(async (page) => {
+            const playUrl = await bilibiliRequest(
+                `https://api.bilibili.com/x/player/playurl?otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`,
+                headers
+            );
+
+            if (playUrl && playUrl.data ? .durl ? . [0] ? .url) {
+                // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
+                const url = playUrl.data.durl[0].url;
+                return {
+                    title: page.part,
+                    duration: page.duration,
+                    durationFormat: new Date((page.duration - 1) * 1000)
+                        .toISOString()
+                        .substr(11, 8),
+                    accept: playUrl.data.accept_description,
+                    url,
+                };
+            }
+            return null;
+        });
+
+        const pages = (await Promise.all(playUrlPromises)).filter(Boolean);
+        const firstPage = pages[0];
+
+        logger.log("Successfully parsed bilibili video, pages:", pages.length);
+
+        return {
+            code: 200,
+            msg: "解析成功",
+            platform: "bilibili",
+            data: {
+                author: videoInfo.data.owner ? .name || "未知作者",
+                uid: String(videoInfo.data.owner ? .mid || ""),
+                avatar: videoInfo.data.owner ? .face || "",
+                like: videoInfo.data.stat ? .like || 0,
+                time: videoInfo.data.pubdate || 0,
+                title: videoInfo.data.title || "无标题",
+                cover: videoInfo.data.pic || "",
+                type: "video",
+                url: firstPage ? .url || "",
+                duration: firstPage ? .duration || 0,
+                pages: pages.length > 0 ? pages : undefined,
+            },
+        };
+    } catch (error) {
+        logger.error("Error parsing bilibili video:", error.message);
+        return {
+            code: 500,
+            msg: "解析失败！"
+        };
+    }
 }
 
 export const GET = createApiHandler(getBilibiliVideoInfo, {
-  shouldCache: false,
-  responseHeaders: {
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  },
+    shouldCache: false,
+    responseHeaders: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
 });
