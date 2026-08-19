@@ -117,6 +117,7 @@ describe("parse route", () => {
     expect(res).toEqual({
       code: 200,
       msg: "解析成功",
+      platform: "kuaishou",
       data: {
         author: "测试作者",
         uid: "",

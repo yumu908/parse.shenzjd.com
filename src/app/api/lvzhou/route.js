@@ -89,6 +89,7 @@ async function lvzhouParse(shareUrl) {
       return {
         code: 200,
         msg: "解析成功",
+        platform: "lvzhou",
         data: {
           title: extracted.title || "绿洲动态",
           author: extracted.author || "",
@@ -103,6 +104,7 @@ async function lvzhouParse(shareUrl) {
       return {
         code: 200,
         msg: "解析成功",
+        platform: "lvzhou",
         data: {
           title: extracted.title || "绿洲动态",
           author: extracted.author || "",

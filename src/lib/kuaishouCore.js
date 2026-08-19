@@ -38,6 +38,7 @@ export function formatResponse(code = 200, msg = "解析成功", data = []) {
   return {
     code,
     msg,
+    platform: "kuaishou",
     data: formattedData,
   };
 }

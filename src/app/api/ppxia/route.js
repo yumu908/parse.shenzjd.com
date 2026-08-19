@@ -63,6 +63,7 @@ async function ppxiaParse(url) {
               return {
                 code: 200,
                 msg: "解析成功",
+                platform: "ppxia",
                 data: {
                   author: item.author?.name || "未知作者",
                   avatar: item.author?.avatar?.download_list?.[0]?.url || "",
@@ -120,6 +121,7 @@ async function ppxiaParse(url) {
             return {
               code: 200,
               msg: "解析成功",
+              platform: "ppxia",
               data: {
                 author: item.author?.name || "未知作者",
                 avatar: item.author?.avatar?.download_list?.[0]?.url || "",
