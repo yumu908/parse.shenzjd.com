@@ -227,7 +227,7 @@ class KuaishouParser {
           videoUrl = this.cleanUrl(videoUrl);
           if (videoUrl.startsWith("http")) {
             const contextData = {
-              photoUrl: videoUrl,
+              url: videoUrl,
               source: "regex-fallback",
             };
             this.extractAdditionalInfo(htmlContent, contextData);
@@ -315,7 +315,7 @@ class KuaishouParser {
           let videoUrl = this.cleanUrl(match[1]);
           if (videoUrl.startsWith("http")) {
             const videoData = {
-              photoUrl: videoUrl,
+              url: videoUrl,
               source: `inline-json-${name}`,
             };
             this.extractAdditionalInfo(htmlContent, videoData);
@@ -339,17 +339,17 @@ class KuaishouParser {
         const content = meta.getAttribute("content");
         if (!property || !content) continue;
         if (property === "og:video" || property === "og:video:url") {
-          videoData.photoUrl = content;
+          videoData.url = content;
         } else if (property === "og:image") {
-          videoData.coverUrl = content;
+          videoData.cover = content;
         } else if (property === "og:title" || property === "og:description") {
           videoData.title = content;
         }
         if (property.includes("video") && content.startsWith("http")) {
-          videoData.photoUrl = content;
+          videoData.url = content;
         }
       }
-      if (videoData.photoUrl) {
+      if (videoData.url) {
         videoData.source = "meta-tags";
         return formatResponse(200, "解析成功", videoData);
       }
@@ -379,13 +379,13 @@ class KuaishouParser {
   extractVideoDataFromObject(obj) {
     if (!obj || typeof obj !== "object") return null;
     const videoUrl =
-      obj.photoUrl || obj.playUrl || obj.videoUrl || obj.mp4Url || obj.src;
+      obj.photoUrl || obj.playUrl || obj.videoUrl || obj.mp4Url || obj.src || obj.url;
     if (
       videoUrl &&
       typeof videoUrl === "string" &&
       videoUrl.startsWith("http")
     ) {
-      const result = { photoUrl: videoUrl, source: "apollo-state-object" };
+      const result = { url: videoUrl, source: "apollo-state-object" };
       this.mapObjectFields(obj, result);
       return formatResponse(200, "解析成功", result);
     }
@@ -394,25 +394,29 @@ class KuaishouParser {
 
   mapObjectFields(source, target) {
     const fieldMappings = {
-      caption: "caption",
+      caption: "title",
       title: "title",
-      coverUrl: "coverUrl",
-      cover: "coverUrl",
-      poster: "coverUrl",
-      thumbnail: "coverUrl",
-      previewUrl: "coverUrl",
-      name: "authorName",
+      coverUrl: "cover",
+      cover: "cover",
+      poster: "cover",
+      thumbnail: "cover",
+      previewUrl: "cover",
+      name: "author",
       author: "author",
-      headUrl: "authorAvatar",
+      authorName: "author",
+      headUrl: "avatar",
       avatar: "avatar",
-      likeCount: "likeCount",
+      authorAvatar: "avatar",
+      likeCount: "like",
       like: "like",
       commentCount: "commentCount",
       shareCount: "shareCount",
       playCount: "playCount",
       duration: "duration",
-      createTime: "createTime",
-      timestamp: "timestamp",
+      createTime: "time",
+      timestamp: "time",
+      kwaiId: "uid",
+      uid: "uid",
     };
     for (const [sourceKey, targetKey] of Object.entries(fieldMappings)) {
       if (source[sourceKey] !== undefined) {
@@ -454,40 +458,43 @@ class KuaishouParser {
       if (match) {
         let coverUrl = this.cleanUrl(match[1]);
         if (coverUrl.startsWith("http") && this.isSimpleImageUrl(coverUrl)) {
-          videoData.coverUrl = coverUrl;
+          videoData.cover = coverUrl;
           break;
         }
       }
     }
-    if (!videoData.coverUrl && allImages) {
+    if (!videoData.cover && allImages) {
       for (const imageUrl of allImages) {
         const cleanUrl = this.cleanUrl(imageUrl);
         if (this.isKuaishouImageUrl(cleanUrl)) {
-          videoData.coverUrl = cleanUrl;
+          videoData.cover = cleanUrl;
           break;
         }
       }
-      if (!videoData.coverUrl) {
+      if (!videoData.cover) {
         for (const imageUrl of allImages.slice(0, 15)) {
           const cleanUrl = this.cleanUrl(imageUrl);
           if (this.looksLikeCover(cleanUrl)) {
-            videoData.coverUrl = cleanUrl;
+            videoData.cover = cleanUrl;
             break;
           }
         }
       }
-      if (!videoData.coverUrl && allImages.length > 0) {
+      if (!videoData.cover && allImages.length > 0) {
         const firstImage = this.cleanUrl(allImages[0]);
         if (this.isReasonableImage(firstImage)) {
-          videoData.coverUrl = firstImage;
+          videoData.cover = firstImage;
         }
       }
     }
-    const captionMatch = htmlContent.match(/"caption":\s*"([^"]+)"/);
-    if (captionMatch) videoData.caption = captionMatch[1];
-    const authorMatch = htmlContent.match(/"name":\s*"([^"]+)"/);
-    if (authorMatch && !authorMatch[1].includes("原声"))
-      videoData.authorName = authorMatch[1];
+    const captionMatch = htmlContent.match(/"caption":\s*"([^"]+)"/) || htmlContent.match(/"title":\s*"([^"]+)"/);
+    if (captionMatch && !videoData.title) videoData.title = captionMatch[1];
+    const authorMatch = htmlContent.match(/"name":\s*"([^"]+)"/) || htmlContent.match(/"author":\s*"([^"]+)"/);
+    if (authorMatch && !authorMatch[1].includes("原声") && !videoData.author)
+      videoData.author = authorMatch[1];
+    const avatarMatch = htmlContent.match(/"headUrl":\s*"([^"]+)"/) || htmlContent.match(/"avatar":\s*"([^"]+)"/);
+    if (avatarMatch && !videoData.avatar)
+      videoData.avatar = this.cleanUrl(avatarMatch[1]);
   }
 
   isSimpleImageUrl(url) {
@@ -601,7 +608,7 @@ class KuaishouParser {
         for (const rawUrl of mp4Matches) {
           const url = this.cleanUrl(rawUrl);
           if (this.isValidVideoUrl(url) && !url.includes(".m3u8") && !url.includes(".ts")) {
-            const videoData = { photoUrl: url, source: "broad-search-mp4" };
+            const videoData = { url: url, source: "broad-search-mp4" };
             this.extractAdditionalInfo(htmlContent, videoData);
             return formatResponse(200, "解析成功", videoData);
           }
@@ -619,7 +626,7 @@ class KuaishouParser {
         if (matches) {
           for (const url of matches.slice(0, 10)) {
             if (this.isValidVideoUrl(url)) {
-              const videoData = { photoUrl: url, source: "broad-search" };
+              const videoData = { url: url, source: "broad-search" };
               this.extractAdditionalInfo(htmlContent, videoData);
               return formatResponse(200, "解析成功", videoData);
             }
@@ -661,7 +668,7 @@ class KuaishouParser {
                 data.src;
               if (videoUrl && this.isValidVideoUrl(videoUrl)) {
                 return formatResponse(200, "解析成功", {
-                  photoUrl: videoUrl,
+                  url: videoUrl,
                   source: "json-fragment",
                   ...data,
                 });

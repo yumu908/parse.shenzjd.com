@@ -18,4 +18,4 @@ async function kuaishouParse(url) {
   }
 }
 
-export const GET = createApiHandler(kuaishouParse);
+export const GET = createApiHandler(kuaishouParse, { shouldCache: false });

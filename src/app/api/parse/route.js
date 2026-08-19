@@ -236,7 +236,7 @@ export async function GET(request) {
 
   if (url) {
     const userPlatform = searchParams.get("platform");
-    return createApiHandler((u) => unifiedParser(u, { platform: userPlatform }))(request);
+    return createApiHandler((u) => unifiedParser(u, { platform: userPlatform }), { shouldCache: false })(request);
   }
 
   if (source && id) {
