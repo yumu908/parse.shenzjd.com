@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import { ApiResponse, KuaishouData } from "@/types/api";
 
 interface KuaishouVideoProps {
@@ -92,10 +93,13 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             {avatar ? (
-              <img
+              <Image
                 src={`/api/proxy?url=${encodeURIComponent(avatar)}&referer=${encodeURIComponent("https://www.kuaishou.com/")}`}
                 alt={authorName}
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-full object-cover"
+                unoptimized
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">

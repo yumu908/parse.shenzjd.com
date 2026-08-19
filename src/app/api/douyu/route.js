@@ -135,17 +135,21 @@ async function parseViaPuppeteer(hashId) {
           done = true;
           resolve(null);
         }
-      }, 10000);
+      }, 20000);
 
       page.on("response", async (response) => {
         if (done) return;
         const url = response.url();
 
-        if (url.includes("playlist.m3u8") || (url.includes(".m3u8") && url.includes("douyu"))) {
+        if (
+          url.includes("playlist.m3u8") ||
+          (url.includes(".m3u8") && url.includes("douyu")) ||
+          url.includes(".flv")
+        ) {
           done = true;
           clearTimeout(timeoutTimer);
           const elapsed = Date.now() - startTime;
-          console.log(`[Douyu Puppeteer] ⚡ 极速命中 m3u8 (${elapsed}ms): ${url}`);
+          console.log(`[Douyu Puppeteer] ⚡ 极速命中 m3u8/flv (${elapsed}ms): ${url}`);
 
           let title = "";
           let cover = "";
@@ -155,17 +159,30 @@ async function parseViaPuppeteer(hashId) {
           } catch {}
 
           resolve({ url, title, cover });
-        } else if (url.includes("vodStream.do") || url.includes("getStreamUrlWeb")) {
+        } else if (
+          url.includes("getStreamUrl") ||
+          url.includes("vodStream") ||
+          url.includes("getVideoUrl") ||
+          url.includes("getStream")
+        ) {
           try {
             const text = await response.text();
-            if (text.includes("surl")) {
+            if (text.includes("http") || text.includes("url") || text.includes("surl")) {
               const json = JSON.parse(text);
-              const item = Array.isArray(json) ? json[0] : json;
-              if (item?.surl) {
+              const dataObj = json?.data || json;
+              const item = Array.isArray(dataObj) ? dataObj[0] : dataObj;
+              const streamUrl =
+                item?.url ||
+                item?.video_url ||
+                item?.stream_url ||
+                item?.surl ||
+                json?.surl;
+
+              if (streamUrl && typeof streamUrl === "string" && streamUrl.startsWith("http")) {
                 done = true;
                 clearTimeout(timeoutTimer);
                 const elapsed = Date.now() - startTime;
-                console.log(`[Douyu Puppeteer] ⚡ 极速命中 surl (${elapsed}ms): ${item.surl}`);
+                console.log(`[Douyu Puppeteer] ⚡ 极速命中 streamUrl (${elapsed}ms): ${streamUrl}`);
 
                 let title = "";
                 let cover = "";
@@ -174,7 +191,7 @@ async function parseViaPuppeteer(hashId) {
                   cover = await page.evaluate(() => window.$DATA?.VIDEO?.cover || "");
                 } catch {}
 
-                resolve({ url: item.surl, title, cover });
+                resolve({ url: streamUrl, title, cover });
               }
             }
           } catch {}
@@ -182,8 +199,26 @@ async function parseViaPuppeteer(hashId) {
       });
 
       const targetUrl = `https://v.douyu.com/show/${hashId}`;
-      page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
+      page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => {});
     });
+
+    if (!result && page) {
+      try {
+        const pageData = await page.evaluate(() => {
+          const data = window.$DATA || window.DATA || {};
+          const video = data.VIDEO || {};
+          return {
+            url: video.url || video.video_url || video.stream_url || "",
+            title: video.title || document.title || "",
+            cover: video.cover || video.pic || "",
+          };
+        });
+        if (pageData?.url) {
+          console.log(`[Douyu Puppeteer] ⚡ 从 window.$DATA 命中播放地址`);
+          return pageData;
+        }
+      } catch {}
+    }
 
     return result;
   } catch (err) {
@@ -229,6 +264,7 @@ async function parseVideoId(hashId) {
     const resData = {
       code: 200,
       msg: "解析成功",
+      platform: "douyu",
       data: {
         title,
         author,

@@ -87,7 +87,7 @@ async function getBilibiliVideoInfo(url) {
       
       if (playUrl && playUrl.data?.durl?.[0]?.url) {
         // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
-        const video_url = playUrl.data.durl[0].url;
+        const url = playUrl.data.durl[0].url;
         return {
           title: page.part,
           duration: page.duration,
@@ -95,31 +95,38 @@ async function getBilibiliVideoInfo(url) {
             .toISOString()
             .substr(11, 8),
           accept: playUrl.data.accept_description,
-          video_url,
+          url,
         };
       }
       return null;
     });
     
-    const bilijson = (await Promise.all(playUrlPromises)).filter(Boolean);
+    const pages = (await Promise.all(playUrlPromises)).filter(Boolean);
+    const firstPage = pages[0];
     
-    logger.log("Successfully parsed bilibili video, pages:", bilijson.length);
+    logger.log("Successfully parsed bilibili video, pages:", pages.length);
     
     return {
-      code: 1,
-      msg: "解析成功！",
-      title: videoInfo.data.title,
-      imgurl: videoInfo.data.pic,
-      desc: videoInfo.data.desc,
-      data: bilijson,
-      user: {
-        name: videoInfo.data.owner.name,
-        user_img: videoInfo.data.owner.face,
+      code: 200,
+      msg: "解析成功",
+      platform: "bilibili",
+      data: {
+        author: videoInfo.data.owner?.name || "未知作者",
+        uid: String(videoInfo.data.owner?.mid || ""),
+        avatar: videoInfo.data.owner?.face || "",
+        like: videoInfo.data.stat?.like || 0,
+        time: videoInfo.data.pubdate || 0,
+        title: videoInfo.data.title || "无标题",
+        cover: videoInfo.data.pic || "",
+        type: "video",
+        url: firstPage?.url || "",
+        duration: firstPage?.duration || 0,
+        pages: pages.length > 0 ? pages : undefined,
       },
     };
   } catch (error) {
     logger.error("Error parsing bilibili video:", error.message);
-    return { code: 0, msg: "解析失败！" };
+    return { code: 500, msg: "解析失败！" };
   }
 }
 

@@ -81,8 +81,10 @@ async function getMusicInfo(url) {
               return {
                 code: 200,
                 msg: "解析成功",
+                platform: "qsmusic",
                 data: {
-                  name: title || "无标题",
+                  author: trackPage?.track?.artist_name || trackPage?.track?.author || "汽水音乐",
+                  avatar: trackPage?.track?.avatar_url || "",
                   title: title || "无标题",
                   url: musicUrl || "",
                   cover: cover,
@@ -114,6 +116,8 @@ async function getMusicInfo(url) {
     let cover = "";
     let musicUrl = "";
     let lyrics = "";
+    let author = "";
+    let avatar = "";
 
     // 提取 LD+JSON 数据
     const ldJsonMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/s);
@@ -134,6 +138,8 @@ async function getMusicInfo(url) {
         musicUrl = trackPage?.audioWithLyricsOption?.url || trackPage?.track?.audio_url || "";
         if (!title) title = trackPage?.track?.title || trackPage?.track?.name || "";
         if (!cover) cover = trackPage?.track?.cover_url || "";
+        author = trackPage?.track?.artist_name || trackPage?.track?.author || "";
+        avatar = trackPage?.track?.avatar_url || "";
 
         // 解析歌词
         const sentences = trackPage?.audioWithLyricsOption?.lyrics?.sentences || [];
@@ -158,8 +164,10 @@ async function getMusicInfo(url) {
     return {
       code: 200,
       msg: "解析成功",
+      platform: "qsmusic",
       data: {
-        name: title || "无标题",
+        author: author || "汽水音乐",
+        avatar: avatar,
         title: title || "无标题",
         url: musicUrl,
         cover: cover,

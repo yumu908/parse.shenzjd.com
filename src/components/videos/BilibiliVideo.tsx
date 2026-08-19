@@ -7,17 +7,43 @@ interface BilibiliVideoProps {
   data: ApiResponse;
 }
 
+interface BilibiliPageItem {
+  title?: string;
+  duration?: number;
+  durationFormat?: string;
+  accept?: string[];
+  url?: string;
+  video_url?: string;
+}
+
 export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
-  const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
-  const hasVideo = videoItems.length > 0;
-  const primaryVideoProxyUrl = hasVideo
-    ? `/api/proxy?url=${encodeURIComponent(
-        videoItems[0].video_url
-      )}&disposition=inline`
+
+  // 兼容新版 data 扁平结构与旧版 data 数组结构
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawData = (data.data || {}) as Record<string, any>;
+  const isLegacyArray = Array.isArray(rawData);
+
+  const title = isLegacyArray ? (data.title || "") : (rawData.title || data.title || "");
+  const authorName = isLegacyArray ? (data.user?.name || "") : (rawData.author || data.user?.name || "");
+  const authorAvatar = isLegacyArray ? (data.user?.user_img || "") : (rawData.avatar || data.user?.user_img || "");
+  const coverUrl = isLegacyArray ? (data.imgurl || "") : (rawData.cover || data.imgurl || "");
+  const mainVideoUrl = isLegacyArray ? (rawData[0]?.video_url || rawData[0]?.url || "") : (rawData.url || "");
+
+  const pages: BilibiliPageItem[] = !isLegacyArray && Array.isArray(rawData.pages)
+    ? rawData.pages
+    : isLegacyArray
+    ? rawData
+    : mainVideoUrl
+    ? [{ title: title || "视频 1", url: mainVideoUrl }]
+    : [];
+
+  const hasVideo = Boolean(mainVideoUrl || pages.length > 0);
+  const primaryVideoProxyUrl = mainVideoUrl
+    ? `/api/proxy?url=${encodeURIComponent(mainVideoUrl)}&disposition=inline`
     : "";
-  const posterProxyUrl = data.imgurl
-    ? `/api/proxy?url=${encodeURIComponent(data.imgurl)}&disposition=inline`
+  const posterProxyUrl = coverUrl
+    ? `/api/proxy?url=${encodeURIComponent(coverUrl)}&disposition=inline`
     : undefined;
 
   const handleVideoError = (
@@ -34,15 +60,15 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info Card */}
-      {(data.user?.user_img || data.title) && (
+      {(authorAvatar || title) && (
         <div className="glass-card p-5">
           <div className="flex items-center gap-4">
-            {data.user?.user_img && (
+            {authorAvatar && (
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#00aeec] to-[#4dc9ff] blur-sm opacity-50" />
                 <Image
-                  src={`/api/proxy?url=${encodeURIComponent(data.user.user_img)}`}
-                  alt={data.user.name || "UP主"}
+                  src={`/api/proxy?url=${encodeURIComponent(authorAvatar)}`}
+                  alt={authorName || "UP主"}
                   width={56}
                   height={56}
                   className="relative rounded-full border-2 border-glass-3"
@@ -51,15 +77,15 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              {data.title && (
+              {title && (
                 <h2 className="text-lg font-semibold text-primary line-clamp-2 mb-1">
-                  {data.title}
+                  {title}
                 </h2>
               )}
-              {data.user?.name && (
+              {authorName && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-secondary">UP主</span>
-                  <span className="text-sm font-medium text-accent">{data.user.name}</span>
+                  <span className="text-sm font-medium text-accent">{authorName}</span>
                 </div>
               )}
             </div>
@@ -75,7 +101,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
       )}
 
       {/* Video Player */}
-      {data.imgurl && hasVideo && (
+      {coverUrl && hasVideo && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
           <div className="aspect-video w-full">
             <video
@@ -126,55 +152,58 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-            下载选项 ({videoItems.length})
+            下载选项 ({pages.length})
           </h3>
 
           <div className="space-y-3">
-            {videoItems.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 rounded-xl bg-glass-2 hover:bg-glass-3 transition-colors duration-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
-                    <span className="text-xs font-bold text-accent">
-                      {index + 1}
-                    </span>
+            {pages.map((item: BilibiliPageItem, index: number) => {
+              const itemVideoUrl = item.url || item.video_url || mainVideoUrl;
+              return (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-4 rounded-xl bg-glass-2 hover:bg-glass-3 transition-colors duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+                      <span className="text-xs font-bold text-accent">
+                        {index + 1}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-primary">
+                        {item.title || `视频 ${index + 1}`}
+                      </p>
+                      {item.durationFormat && (
+                        <p className="text-xs text-muted">{item.durationFormat}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-primary">
-                      {item.title || `视频 ${index + 1}`}
-                    </p>
-                    {item.durationFormat && (
-                      <p className="text-xs text-muted">{item.durationFormat}</p>
-                    )}
-                  </div>
-                </div>
 
-                <a
-                  href={`/api/proxy?url=${encodeURIComponent(
-                    item.video_url
-                  )}&filename=${encodeURIComponent(
-                    (data.title || "bilibili") + `-${index + 1}`
-                  )}&disposition=attachment`}
-                  download
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00aeec] to-[#4dc9ff] hover:from-[#0099d4] hover:to-[#3db8e8] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25 hover:-translate-y-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  下载
-                </a>
-              </div>
-            ))}
+                  <a
+                    href={`/api/proxy?url=${encodeURIComponent(
+                      itemVideoUrl
+                    )}&filename=${encodeURIComponent(
+                      (title || "bilibili") + `-${index + 1}`
+                    )}&disposition=attachment`}
+                    download
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00aeec] to-[#4dc9ff] hover:from-[#0099d4] hover:to-[#3db8e8] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25 hover:-translate-y-0.5">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    下载
+                  </a>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
