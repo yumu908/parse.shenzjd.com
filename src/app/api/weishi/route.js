@@ -15,30 +15,78 @@ function decodeCleanUrl(str) {
 
   if (clean.startsWith("//")) {
     clean = "https:" + clean;
+  } else if (clean.startsWith("http:")) {
+    clean = clean.replace(/^http:\/*/, "http://");
+  } else if (clean.startsWith("https:")) {
+    clean = clean.replace(/^https:\/*/, "https://");
   } else if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
     clean = "https://" + clean.replace(/^\/+/, "");
   }
   return clean;
 }
 
-/**
- * 直接通过抓取微视 HTML 详情页解构高清视频流（最干净、最稳定的直接抓取路径）
- */
+const WECHAT_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.38(0x1800262c) NetType/WIFI Language/zh_CN";
+
 async function parseVideoId(videoId) {
+  // 1. 优先尝试 Weishi H5 JSON API
+  try {
+    const apiRes = await fetch(
+      `https://h5.weishi.qq.com/webapp/json/weishi/WnsFeedDetail?g_tk=&feedid=${videoId}`,
+      {
+        headers: {
+          "User-Agent": WECHAT_UA,
+          "Referer": "https://h5.weishi.qq.com/",
+        },
+        signal: AbortSignal.timeout(3500),
+      }
+    );
+    if (apiRes.ok) {
+      const text = await apiRes.text();
+      if (text.includes("video_url") || text.includes("http")) {
+        const json = JSON.parse(text);
+        const feed = json?.data?.feed;
+        if (feed) {
+          const rawUrl =
+            feed.video_url ||
+            feed.video_spec_urls?.[0]?.url ||
+            feed.video_spec_urls?.[1]?.url ||
+            "";
+          if (rawUrl) {
+            return {
+              code: 200,
+              msg: "解析成功",
+              platform: "weishi",
+              data: {
+                title: feed.feed_desc || "微视视频",
+                author: feed.poster?.nickname || "",
+                avatar: decodeCleanUrl(feed.poster?.avatar || ""),
+                cover: decodeCleanUrl(feed.cover_url || ""),
+                url: decodeCleanUrl(rawUrl),
+              },
+            };
+          }
+        }
+      }
+    }
+  } catch {}
+
   const htmlUrls = [
-    `https://isee.weishi.qq.com/ws/app-pages/share/index.html?id=${videoId}`,
+    `https://isee.weishi.qq.com/ws/app-pages/share/index.html?id=${videoId}&wxplay=1`,
     `https://m.weishi.qq.com/vise/share/index.html?id=${videoId}`,
-    `https://isee.weishi.qq.com/share/index.html?id=${videoId}`,
+    `https://h5.weishi.qq.com/weishi/feed/profile/${videoId}`,
   ];
 
   for (const htmlUrl of htmlUrls) {
     try {
       const res = await fetch(htmlUrl, {
         headers: {
-          "User-Agent": DEFAULT_MOBILE_UA,
+          "User-Agent": WECHAT_UA,
           "Referer": "https://isee.weishi.qq.com/",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "zh-CN,zh;q=0.9",
         },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(4000),
       });
 
       if (res.ok) {
@@ -47,8 +95,10 @@ async function parseVideoId(videoId) {
           html.match(/"video_url"\s*:\s*"([^"]+)"/i) ||
           html.match(/<video[^>]+src="([^"]+)"/i) ||
           html.match(/"url"\s*:\s*"(https?:[^\"]+?\.mp4[^\"]*)"/i) ||
-          html.match(/https?:\/\/[^\s"'<>]+?\.mp4[^\s"'<>]*/i) ||
-          html.match(/(?:\\u002F){2}[^\s"'<>]+\.mp4[^\s"'<>]*/i);
+          html.match(/(https?:\/\/[^\s"'<>]+?\.f\d+\.mp4[^\s"'<>]*)/i) ||
+          html.match(/(https?:\/\/[^\s"'<>]+?dis_k=[^\s"'<>]*)["'\s>]/i) ||
+          html.match(/(https?:\/\/[^\s"'<>]+?\.mp4[^\s"'<>]*)/i) ||
+          html.match(/(?:\\u002F){2}[^\s"'<>]+(?:\.mp4|\.f\d+)[^\s"'<>]*/i);
 
         if (videoMatch) {
           const rawVideoUrl = videoMatch[1] || videoMatch[0];

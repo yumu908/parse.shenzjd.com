@@ -11,6 +11,26 @@ const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT ||
 
 const BILIBILI_COOKIE = process.env.BILIBILI_COOKIE || "";
 
+function cleanVideoUrl(str) {
+    if (!str) return "";
+    let clean = String(str)
+        .replace(/\\u002F/gi, "/")
+        .replace(/\\u002f/gi, "/")
+        .replace(/u002F/gi, "/")
+        .replace(/u002f/gi, "/")
+        .replace(/\\/g, "")
+        .replace(/&amp;/g, "&");
+
+    if (clean.startsWith("//")) {
+        clean = "https:" + clean;
+    } else if (clean.startsWith("https:")) {
+        clean = clean.replace(/^https:\/*/, "https://");
+    } else if (clean.startsWith("http:")) {
+        clean = clean.replace(/^http:\/*/, "http://");
+    }
+    return clean;
+}
+
 function cleanUrlParameters(url) {
     try {
         const parsed = new URL(url);
@@ -25,18 +45,22 @@ function cleanUrlParameters(url) {
     }
 }
 
+const DEFAULT_MOBILE_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+
 async function bilibiliRequest(url, headers) {
     try {
         const defaultCookie = "buvid3=INFOC_1234567890_1234567890; b_nut=1234567890;";
         const response = await fetch(url, {
             headers: {
-                "User-Agent": BILIBILI_USER_AGENT,
+                "User-Agent": DEFAULT_MOBILE_UA,
                 "Referer": "https://www.bilibili.com/",
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
                 Cookie: BILIBILI_COOKIE || defaultCookie,
                 ...headers,
             },
+            signal: AbortSignal.timeout(3500),
         });
         return await response.json();
     } catch (error) {
@@ -58,15 +82,19 @@ async function getBilibiliVideoInfo(url) {
                     redirect: "manual"
                 });
                 const loc = response.headers.get("location");
+                logger.log("[Bilibili Debug] b23.tv location header:", loc);
                 if (loc) {
-                    const redirectUrl = new URL(loc);
+                    const redirectUrl = new URL(loc, url);
                     bvid = redirectUrl.pathname;
                 } else if (response.url) {
                     bvid = new URL(response.url).pathname;
                 }
-            } catch {
-                const response = await fetch(url, { redirect: "follow" });
-                bvid = new URL(response.url).pathname;
+            } catch (err) {
+                logger.warn("[Bilibili Debug] b23.tv redirect error:", err.message);
+                try {
+                    const response = await fetch(url, { redirect: "follow" });
+                    bvid = new URL(response.url).pathname;
+                } catch {}
             }
         } else if (
             parsedUrl.hostname === "www.bilibili.com" ||
@@ -81,6 +109,7 @@ async function getBilibiliVideoInfo(url) {
         }
 
         if (!bvid || !bvid.includes("/video/")) {
+            logger.warn("[Bilibili Debug] Invalid bvid extracted:", bvid);
             return {
                 code: -1,
                 msg: "好像不是视频链接"
@@ -88,7 +117,7 @@ async function getBilibiliVideoInfo(url) {
         }
 
         bvid = bvid.replace("/video/", "").replace(/^\/+/, "").split("?")[0].split("/")[0];
-        logger.log("Processing bilibili video, bvid:", bvid);
+        logger.log("[Bilibili Debug] Extracted bvid:", bvid);
 
         const headers = {
             "Content-Type": "application/json;charset=UTF-8"
@@ -100,9 +129,11 @@ async function getBilibiliVideoInfo(url) {
             headers
         );
 
+        logger.log("[Bilibili Debug] API response code:", videoInfo?.code, "msg:", videoInfo?.message);
+
         // 如果官方 API 被 Cloudflare 边缘节点 IP 拦截 (-412) 或失败，切换到 HTML 页面 __INITIAL_STATE__ / __playinfo__ 回退解析
         if (!videoInfo || videoInfo.code !== 0) {
-            logger.warn("Bilibili API returned non-zero code, attempting HTML page fallback parsing for bvid:", bvid);
+            logger.warn("[Bilibili Debug] Bilibili API failed, attempting HTML fallback for bvid:", bvid);
             const htmlRes = await fetch(`https://www.bilibili.com/video/${bvid}`, {
                 headers: {
                     "User-Agent": BILIBILI_USER_AGENT,
@@ -149,6 +180,7 @@ async function getBilibiliVideoInfo(url) {
                 }
 
                 if (videoUrl || pageTitle) {
+                    logger.log("[Bilibili Debug] Successfully extracted video from HTML fallback! Title:", pageTitle, "Url:", videoUrl ? "OK" : "EMPTY");
                     return {
                         code: 200,
                         msg: "解析成功",
@@ -169,6 +201,7 @@ async function getBilibiliVideoInfo(url) {
                 }
             }
 
+            logger.warn("[Bilibili Debug] HTML fallback also failed to extract video URL for bvid:", bvid);
             return {
                 code: 404,
                 msg: "解析失败！未能在 B站 找到有效播放地址",
@@ -200,8 +233,56 @@ async function getBilibiliVideoInfo(url) {
 
         const pages = (await Promise.all(playUrlPromises)).filter(Boolean);
         const firstPage = pages[0];
+        let mainVideoUrl = firstPage?.url || "";
 
-        logger.log("Successfully parsed bilibili video, pages:", pages.length);
+        if (!mainVideoUrl) {
+            logger.warn("[Bilibili Debug] playurl API returned empty URL, attempting HTML playinfo fallback for bvid:", bvid);
+            try {
+                const htmlRes = await fetch(`https://www.bilibili.com/video/${bvid}`, {
+                    headers: {
+                        "User-Agent": DEFAULT_MOBILE_UA,
+                        "Referer": "https://www.bilibili.com/",
+                        "Cookie": BILIBILI_COOKIE || "buvid3=INFOC_1234567890_1234567890; b_nut=1234567890;",
+                    },
+                    signal: AbortSignal.timeout(3500),
+                });
+                if (htmlRes.ok) {
+                    const html = await htmlRes.text();
+                    const playinfoMatch = html.match(/window\.__playinfo__\s*=\s*({[\s\S]*?});/) || html.match(/<script>window\.__playinfo__=(.*?)<\/script>/);
+                    if (playinfoMatch?.[1]) {
+                        const playinfo = JSON.parse(playinfoMatch[1]);
+                        mainVideoUrl = playinfo.data?.durl?.[0]?.url || playinfo.data?.dash?.video?.[0]?.baseUrl || "";
+                    }
+                    if (!mainVideoUrl) {
+                        const mp4Match = html.match(/"url"\s*:\s*"(https?:[^\"]+?\.mp4[^\"]*)"/i) || html.match(/(https?:\/\/[^\s"'<>]+?\.mp4[^\s"'<>]*)/i);
+                        if (mp4Match?.[1] || mp4Match?.[0]) {
+                            mainVideoUrl = (mp4Match[1] || mp4Match[0]).replace(/\\/g, "");
+                        }
+                    }
+                }
+
+                if (!mainVideoUrl) {
+                    const mRes = await fetch(`https://m.bilibili.com/video/${bvid}`, {
+                        headers: {
+                            "User-Agent": DEFAULT_MOBILE_UA,
+                            "Referer": "https://m.bilibili.com/",
+                        },
+                        signal: AbortSignal.timeout(3500),
+                    });
+                    if (mRes.ok) {
+                        const mHtml = await mRes.text();
+                        const mp4Match = mHtml.match(/"url"\s*:\s*"(https?:[^\"]+?\.mp4[^\"]*)"/i) || mHtml.match(/(https?:\/\/[^\s"'<>]+?\.mp4[^\s"'<>]*)/i);
+                        if (mp4Match?.[1] || mp4Match?.[0]) {
+                            mainVideoUrl = (mp4Match[1] || mp4Match[0]).replace(/\\/g, "");
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.error("[Bilibili Debug] HTML playinfo fallback error:", err.message);
+            }
+        }
+
+        logger.log("[Bilibili Debug] Successfully parsed bilibili video, mainVideoUrl:", mainVideoUrl ? "OK" : "EMPTY");
 
         return {
             code: 200,
@@ -216,9 +297,9 @@ async function getBilibiliVideoInfo(url) {
                 title: videoInfo.data.title || "无标题",
                 cover: videoInfo.data.pic || "",
                 type: "video",
-                url: firstPage?.url || "",
+                url: cleanVideoUrl(mainVideoUrl),
                 duration: firstPage?.duration || 0,
-                pages: pages.length > 0 ? pages : undefined,
+                pages: pages.length > 0 ? pages.map(p => ({ ...p, url: cleanVideoUrl(p.url) })) : undefined,
             },
         };
     } catch (error) {
