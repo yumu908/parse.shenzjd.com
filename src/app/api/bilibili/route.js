@@ -27,11 +27,15 @@ function cleanUrlParameters(url) {
 
 async function bilibiliRequest(url, headers) {
     try {
+        const defaultCookie = "buvid3=INFOC_1234567890_1234567890; b_nut=1234567890;";
         const response = await fetch(url, {
             headers: {
-                ...headers,
                 "User-Agent": BILIBILI_USER_AGENT,
-                Cookie: BILIBILI_COOKIE,
+                "Referer": "https://www.bilibili.com/",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                Cookie: BILIBILI_COOKIE || defaultCookie,
+                ...headers,
             },
         });
         return await response.json();
@@ -47,12 +51,23 @@ async function getBilibiliVideoInfo(url) {
         const parsedUrl = new URL(cleanUrl);
         let bvid;
 
-        if (parsedUrl.hostname === "b23.tv") {
-            const response = await fetch(url, {
-                redirect: "follow"
-            });
-            const redirectUrl = new URL(response.url);
-            bvid = redirectUrl.pathname;
+        if (parsedUrl.hostname === "b23.tv" || url.includes("b23.tv")) {
+            try {
+                const response = await fetch(url, {
+                    headers: { "User-Agent": BILIBILI_USER_AGENT },
+                    redirect: "manual"
+                });
+                const loc = response.headers.get("location");
+                if (loc) {
+                    const redirectUrl = new URL(loc);
+                    bvid = redirectUrl.pathname;
+                } else if (response.url) {
+                    bvid = new URL(response.url).pathname;
+                }
+            } catch {
+                const response = await fetch(url, { redirect: "follow" });
+                bvid = new URL(response.url).pathname;
+            }
         } else if (
             parsedUrl.hostname === "www.bilibili.com" ||
             parsedUrl.hostname === "m.bilibili.com"
@@ -65,14 +80,14 @@ async function getBilibiliVideoInfo(url) {
             };
         }
 
-        if (!bvid.includes("/video/")) {
+        if (!bvid || !bvid.includes("/video/")) {
             return {
                 code: -1,
                 msg: "好像不是视频链接"
             };
         }
 
-        bvid = bvid.replace("/video/", "");
+        bvid = bvid.replace("/video/", "").replace(/^\/+/, "").split("?")[0].split("/")[0];
         logger.log("Processing bilibili video, bvid:", bvid);
 
         const headers = {
@@ -88,10 +103,11 @@ async function getBilibiliVideoInfo(url) {
         // 如果官方 API 被 Cloudflare 边缘节点 IP 拦截 (-412) 或失败，切换到 HTML 页面 __INITIAL_STATE__ / __playinfo__ 回退解析
         if (!videoInfo || videoInfo.code !== 0) {
             logger.warn("Bilibili API returned non-zero code, attempting HTML page fallback parsing for bvid:", bvid);
-            const htmlRes = await fetch(`https://m.bilibili.com/video/${bvid}`, {
+            const htmlRes = await fetch(`https://www.bilibili.com/video/${bvid}`, {
                 headers: {
-                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-                    "Referer": "https://m.bilibili.com/",
+                    "User-Agent": BILIBILI_USER_AGENT,
+                    "Referer": "https://www.bilibili.com/",
+                    "Cookie": BILIBILI_COOKIE || "buvid3=INFOC_1234567890_1234567890; b_nut=1234567890;",
                 },
             });
 

@@ -28,7 +28,7 @@ async function parseVideoId(videoId) {
   const htmlUrls = [
     `https://isee.weishi.qq.com/ws/app-pages/share/index.html?id=${videoId}`,
     `https://m.weishi.qq.com/vise/share/index.html?id=${videoId}`,
-    `https://h5.weishi.qq.com/weishi/feed/profile/${videoId}`,
+    `https://isee.weishi.qq.com/share/index.html?id=${videoId}`,
   ];
 
   for (const htmlUrl of htmlUrls) {
@@ -55,14 +55,17 @@ async function parseVideoId(videoId) {
           const cleanVideoUrl = decodeCleanUrl(rawVideoUrl);
           const titleMatch = html.match(/<title>(.*?)<\/title>/i) || html.match(/"feed_desc"\s*:\s*"([^"]+)"/i);
           const coverMatch = html.match(/"cover_url"\s*:\s*"([^"]+)"/i) || html.match(/poster="([^"]+)"/i);
+          const authorMatch = html.match(/"nick"\s*:\s*"([^"]+)"/i) || html.match(/"nickname"\s*:\s*"([^"]+)"/i);
+          const avatarMatch = html.match(/"avatar"\s*:\s*"([^"]+)"/i);
 
           return {
             code: 200,
             msg: "解析成功",
+            platform: "weishi",
             data: {
               title: titleMatch?.[1]?.replace(/_微视.*/, "").trim() || "微视视频",
-              author: "",
-              avatar: "",
+              author: authorMatch?.[1] || "",
+              avatar: decodeCleanUrl(avatarMatch?.[1] || ""),
               cover: decodeCleanUrl(coverMatch?.[1] || ""),
               url: cleanVideoUrl,
             },
@@ -72,7 +75,7 @@ async function parseVideoId(videoId) {
     } catch {}
   }
 
-  return { code: 404, msg: "未找到微视视频播放地址，请稍后再试" };
+  return { code: 404, msg: "未找到微视视频播放地址，请稍后再试", platform: "weishi" };
 }
 
 async function weishiParse(shareUrl) {
@@ -88,7 +91,28 @@ async function weishiParse(shareUrl) {
     feedId = mQuery[1];
   }
 
-  // 2. 若未含 Query 参数，尝试跟进 302 重定向
+  // 2. 若未含 Query 参数，尝试跟进 302 手动重定向获取 Location 响应头
+  if (!feedId) {
+    try {
+      const res = await fetch(shareUrl, {
+        headers: { "User-Agent": DEFAULT_MOBILE_UA },
+        redirect: "manual",
+        signal: AbortSignal.timeout(6000),
+      });
+      const location = res.headers.get("location");
+      if (location) {
+        const mLoc =
+          location.match(/[?&]id=([A-Za-z0-9_]+)/i) ||
+          location.match(/[?&]feedid=([A-Za-z0-9_]+)/i) ||
+          location.match(/\/([A-Za-z0-9_]{10,})/);
+        if (mLoc?.[1]) {
+          feedId = mLoc[1];
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Follow redirect 备用路径
   if (!feedId) {
     try {
       const res = await fetch(shareUrl, {
@@ -108,7 +132,7 @@ async function weishiParse(shareUrl) {
     } catch {}
   }
 
-  // 3. 最后 fallback 短链路径剥离
+  // 4. 最后 fallback 短链路径剥离
   if (!feedId) {
     const mPath = shareUrl.match(/\/([A-Za-z0-9_]{5,})/);
     if (mPath?.[1]) {
@@ -117,7 +141,7 @@ async function weishiParse(shareUrl) {
   }
 
   if (!feedId) {
-    return { code: 400, msg: "无法从微视链接解析视频 id" };
+    return { code: 400, msg: "无法从微视链接解析视频 id", platform: "weishi" };
   }
 
   return parseVideoId(feedId);
