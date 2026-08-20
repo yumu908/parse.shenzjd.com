@@ -1,12 +1,5 @@
-import dns from "node:dns";
 import { createApiHandler } from "@/lib/api-middleware";
 import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
-
-try {
-  dns.setDefaultResultOrder("ipv4first");
-} catch {}
-
-export const runtime = "nodejs";
 
 /**
  * 彻底解码与清洗 URL 中的 \u002F Unicode 转义符与转义斜杠，防止视频地址变成 u002F... 导致前端播放 404

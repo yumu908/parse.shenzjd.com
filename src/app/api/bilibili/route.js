@@ -80,16 +80,82 @@ async function getBilibiliVideoInfo(url) {
         };
 
         // 获取视频信息
-        const videoInfo = await bilibiliRequest(
+        let videoInfo = await bilibiliRequest(
             `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
             headers
         );
 
+        // 如果官方 API 被 Cloudflare 边缘节点 IP 拦截 (-412) 或失败，切换到 HTML 页面 __INITIAL_STATE__ / __playinfo__ 回退解析
         if (!videoInfo || videoInfo.code !== 0) {
-            logger.warn("Failed to fetch video info, response:", videoInfo);
+            logger.warn("Bilibili API returned non-zero code, attempting HTML page fallback parsing for bvid:", bvid);
+            const htmlRes = await fetch(`https://m.bilibili.com/video/${bvid}`, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+                    "Referer": "https://m.bilibili.com/",
+                },
+            });
+
+            if (htmlRes.ok) {
+                const html = await htmlRes.text();
+                let pageTitle = "";
+                let pageCover = "";
+                let pageAuthor = "";
+                let pageAvatar = "";
+                let pageUid = "";
+                let videoUrl = "";
+
+                const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
+                if (stateMatch?.[1]) {
+                    try {
+                        const state = JSON.parse(stateMatch[1]);
+                        const v = state.videoData || {};
+                        pageTitle = v.title || "";
+                        pageCover = v.pic || "";
+                        pageAuthor = v.owner?.name || "";
+                        pageAvatar = v.owner?.face || "";
+                        pageUid = String(v.owner?.mid || "");
+                    } catch {}
+                }
+
+                const playinfoMatch = html.match(/window\.__playinfo__\s*=\s*({[\s\S]*?});/) || html.match(/<script>window\.__playinfo__=(.*?)<\/script>/);
+                if (playinfoMatch?.[1]) {
+                    try {
+                        const playinfo = JSON.parse(playinfoMatch[1]);
+                        videoUrl = playinfo.data?.durl?.[0]?.url || playinfo.data?.dash?.video?.[0]?.baseUrl || "";
+                    } catch {}
+                }
+
+                if (!videoUrl) {
+                    const mp4Match = html.match(/"url"\s*:\s*"(https?:[^\"]+?\.mp4[^\"]*)"/i) || html.match(/(https?:\/\/[^\s"'<>]+?\.mp4[^\s"'<>]*)/i);
+                    if (mp4Match?.[1] || mp4Match?.[0]) {
+                        videoUrl = (mp4Match[1] || mp4Match[0]).replace(/\\/g, "");
+                    }
+                }
+
+                if (videoUrl || pageTitle) {
+                    return {
+                        code: 200,
+                        msg: "解析成功",
+                        platform: "bilibili",
+                        data: {
+                            author: pageAuthor || "未知作者",
+                            uid: pageUid,
+                            avatar: pageAvatar,
+                            like: 0,
+                            time: 0,
+                            title: pageTitle || "无标题",
+                            cover: pageCover,
+                            type: "video",
+                            url: videoUrl,
+                            duration: 0,
+                        },
+                    };
+                }
+            }
+
             return {
-                code: 0,
-                msg: "解析失败！"
+                code: 404,
+                msg: "解析失败！未能在 B站 找到有效播放地址",
             };
         }
 

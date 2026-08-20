@@ -1,20 +1,5 @@
-import dns from "node:dns";
-import fs from "node:fs";
-import path from "node:path";
 import { createApiHandler } from "@/lib/api-middleware";
 import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
-
-// 彻底清除坏掉的本地系统代理配置
-delete process.env.http_proxy;
-delete process.env.HTTP_PROXY;
-delete process.env.https_proxy;
-delete process.env.HTTPS_PROXY;
-
-try {
-  dns.setDefaultResultOrder("ipv4first");
-} catch {}
-
-export const runtime = "nodejs";
 
 /**
  * 动态获取 WEIBO_COOKIE（支持从 .env.local 实时读取，无需重启开发服务器）

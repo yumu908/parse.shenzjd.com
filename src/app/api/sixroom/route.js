@@ -1,12 +1,5 @@
-import dns from "node:dns";
 import { createApiHandler } from "@/lib/api-middleware";
 import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
-
-try {
-  dns.setDefaultResultOrder("ipv4first");
-} catch {}
-
-export const runtime = "nodejs";
 
 async function parseVideoId(videoId) {
   // 1. 发起六间房 H5 API 请求 (兼容 HTTP/HTTPS)
